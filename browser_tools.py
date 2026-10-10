@@ -2,7 +2,7 @@
 from pathlib import Path
 import os
 import subprocess
-from urllib.parse import urlencode
+from urllib.parse import urlencode,urlparse
 from command_types import CommandDecision,RequestResult
 
 HOME_URLS={'google':'https://www.google.com/','youtube':'https://www.youtube.com/','wikipedia':'https://en.wikipedia.org/'}
@@ -37,6 +37,14 @@ def search_url(site,query):
     return 'https://en.wikipedia.org/w/index.php?'+urlencode({'search':query})
 
 class BrowserTools:
+    def open_url(self,url):
+        parsed=urlparse(url)
+        if parsed.scheme not in {'http','https'} or not parsed.hostname or parsed.username or parsed.password or len(url)>2000:
+            raise BrowserActionError('Use a valid HTTP(S) website URL without embedded credentials.')
+        try:subprocess.Popen([str(find_chrome()),'--new-tab',url],shell=False,stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL)
+        except OSError as exc:raise BrowserActionError('Chrome could not open that page.') from exc
+        return RequestResult('Opened the requested webpage in Chrome.','browser',url)
+
     def execute(self,decision:CommandDecision):
         # Local validation applies even if a caller passes a constructed or modified object.
         decision=CommandDecision.model_validate(decision.model_dump())

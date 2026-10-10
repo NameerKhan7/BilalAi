@@ -29,7 +29,11 @@ def transcribe_recording(path,api_key=None,language=None):
     key=api_key or os.environ.get('GROQ_API_KEY') or dotenv_values(ROOT/'.env').get('GROQ_API_KEY')
     if not key or not key.strip():
         raise TranscriptionError('Add GROQ_API_KEY to your local .env file, then try again.')
-    options={'file':(path.name,path.read_bytes()),'model':DEFAULT_MODEL,'response_format':'json','temperature':0.0,'prompt':VOCABULARY_HINT}
+    from memory import LocalState
+    profile=LocalState().memories()
+    corrections='; '.join(v for k,v in profile.items() if k.startswith(('alias.','pronunciation.')))[:500]
+    hint=VOCABULARY_HINT+(' Confirmed vocabulary: '+corrections if corrections else '')
+    options={'file':(path.name,path.read_bytes()),'model':DEFAULT_MODEL,'response_format':'json','temperature':0.0,'prompt':hint}
     if language: options['language']=language
     try:
         with Groq(api_key=key,timeout=20.0,max_retries=1) as client:

@@ -1,28 +1,56 @@
 """Background recording, transcription and agent tasks; UI receives signals only."""
 from pathlib import Path
-import threading, uuid
+import threading, uuid,subprocess
+from runtime_paths import worker_python
 from PySide6.QtCore import QObject,Signal
 from audio_capture import CaptureConfig,capture_command,save_recording
 from stt_client import transcribe_recording,TranscriptionError
 from agent_core import AgentBrain,AgentError
 from request_router import RequestProcessor,RequestCancelled
 from wake_service import WakeMonitor
+from voice_cancel import CancelListener,is_cancel_request,strip_wake_prefix
+from memory import LocalState
+from business_tools import BusinessWorkflows
 ROOT=Path(__file__).resolve().parent
 
 class AssistantController(QObject):
     event=Signal(str,object)
-    def __init__(self,enable_wake=True):
+    def __init__(self,enable_wake=True,enable_cancel=None,state=None):
         super().__init__();self.state='idle';self.closed=False
-        self.cancel=threading.Event();self.stop_capture=threading.Event();self.brain=AgentBrain()
+        self.cancel=threading.Event();self.stop_capture=threading.Event();self.state_store=state or LocalState(recover_inflight=enable_wake)
+        self.brain=AgentBrain(state=self.state_store);self.business=BusinessWorkflows(self.state_store)
+        self.reviewed_action=None;self.learning_process=None
+        self.cancel_listener=CancelListener(self.cancel_request) if (enable_wake if enable_cancel is None else enable_cancel) else None
         self.processor=RequestProcessor(self.brain,on_progress=lambda text:self.emit('progress',text))
         self.wake_enabled=enable_wake
-        self.monitor=WakeMonitor(self.emit) if enable_wake else None
+        self.monitor=WakeMonitor(self.wake_event) if enable_wake else None
         if self.monitor: self.monitor.resume()
+    def wake_event(self,name,data):
+        if name!='wake':self.emit(name,data);return
+        if self.closed or self.state!='idle':return
+        self.state='recording';self.cancel=threading.Event();self.stop_capture=threading.Event()
+        self.emit('wake_activated',{'sample_id':data.get('sample_id')})
+        try:
+            result=capture_command(CaptureConfig(calibration_seconds=0),stop_event=self.stop_capture,
+                on_event=self.emit,stream=data['stream'],leading_audio=data.get('leading_audio'))
+            threading.Thread(target=self._captured,args=(result,),daemon=True).start()
+        except Exception:
+            self.state='idle';self.emit('error','Wake capture failed. Try starting from the tray.');self.emit('finished',None)
+    def _captured(self,result):
+        try:
+            if self.monitor:self.monitor.pause()
+            self._process_capture(result)
+        except RequestCancelled:self.emit('cancelled',None)
+        except (TranscriptionError,AgentError) as exc:self.emit('cancelled' if self.cancel.is_set() else 'error',None if self.cancel.is_set() else str(exc))
+        except Exception:self.emit('error','The voice request could not finish.')
+        finally:
+            if self.cancel_listener:self.cancel_listener.stop()
+            self.state='idle';self.emit('finished',None)
     def emit(self,name,data=None):
         if not self.closed: self.event.emit(name,data)
     def set_wake(self,enabled):
         self.wake_enabled=enabled
-        if enabled and self.monitor is None: self.monitor=WakeMonitor(self.emit)
+        if enabled and self.monitor is None: self.monitor=WakeMonitor(self.wake_event)
         if self.monitor:
             if enabled and self.state=='idle': self.monitor.resume()
             else: self.monitor.pause()
@@ -36,20 +64,25 @@ class AssistantController(QObject):
             if self.monitor: self.monitor.pause()
             config=CaptureConfig(calibration_seconds=0 if from_wake else .30)
             result=capture_command(config,stop_event=self.stop_capture,on_event=self.emit)
-            if self.cancel.is_set(): raise RequestCancelled()
-            if not result.speech_detected:
-                self.emit('empty','I didn’t hear a command. Try again when you’re ready.');return
-            path=save_recording(result,ROOT/'recordings'/f'command_{uuid.uuid4().hex[:8]}.wav')
-            if result.reason=='max_length': self.emit('limit','Reached the 90-second recording limit.')
-            self.state='transcribing';self.emit('transcribing',None)
-            text=transcribe_recording(path)
-            if self.cancel.is_set(): raise RequestCancelled()
-            path.with_suffix('.txt').write_text(text+'\n',encoding='utf-8')
-            self.emit('transcript',text);self._agent(text,path)
+            self._process_capture(result)
         except RequestCancelled: self.emit('cancelled',None)
-        except (TranscriptionError,AgentError) as exc: self.emit('error',str(exc))
+        except (TranscriptionError,AgentError) as exc:self.emit('cancelled' if self.cancel.is_set() else 'error',None if self.cancel.is_set() else str(exc))
         except Exception: self.emit('error','The request could not finish. Your saved recording is kept locally.')
-        finally: self.state='idle';self.emit('finished',None)
+        finally:
+            if self.cancel_listener:self.cancel_listener.stop()
+            self.state='idle';self.emit('finished',None)
+    def _process_capture(self,result):
+        if self.cancel.is_set(): raise RequestCancelled()
+        if not result.speech_detected:
+            self.emit('empty','I didn’t hear a command. Try again when you’re ready.');return
+        path=save_recording(result,ROOT/'recordings'/f'command_{uuid.uuid4().hex[:8]}.wav')
+        if result.reason=='max_length': self.emit('limit','Reached the 90-second recording limit.')
+        self.state='transcribing';self.emit('transcribing',None)
+        if self.cancel_listener:self.cancel_listener.start()
+        text=transcribe_recording(path)
+        if self.cancel.is_set(): raise RequestCancelled()
+        path.with_suffix('.txt').write_text(text+'\n',encoding='utf-8')
+        self.emit('transcript',text);self._agent(text,path)
     def send(self,text):
         text=text.strip()
         if self.state!='idle' or not text: return
@@ -61,10 +94,18 @@ class AssistantController(QObject):
             if self.monitor: self.monitor.pause()
             self._agent(text)
         except RequestCancelled: self.emit('cancelled',None)
-        except AgentError as exc: self.emit('error',str(exc))
+        except AgentError as exc:self.emit('cancelled' if self.cancel.is_set() else 'error',None if self.cancel.is_set() else str(exc))
         except Exception: self.emit('error','The agent could not complete this request. Please retry.')
-        finally: self.state='idle';self.emit('finished',None)
+        finally:
+            if self.cancel_listener:self.cancel_listener.stop()
+            self.state='idle';self.emit('finished',None)
     def _agent(self,text,path=None):
+        text=strip_wake_prefix(text)
+        if not text:
+            self.emit('empty','Ready when you have a command.');return
+        if is_cancel_request(text):
+            self.cancel_request();self.emit('cancelled',None);return
+        if self.cancel_listener:self.cancel_listener.start()
         self.state='thinking';self.emit('thinking',None)
         result=self.processor.handle(text,self.cancel)
         if self.cancel.is_set(): raise RequestCancelled()
@@ -72,10 +113,53 @@ class AssistantController(QObject):
         trace=getattr(self.processor,'last_trace',[])
         verified=bool(trace) and all(step['result'].get('ok') is True for step in trace) and any(step['result'].get('verified') is True for step in trace)
         self.emit('reply',{'text':result.reply,'verified':verified})
+        for step in trace:
+            action_id=step['result'].get('approval_id')
+            if action_id:
+                pending=self.state_store.get(action_id)
+                if pending['status']=='pending':self.emit('approval',pending);break
+    def collect_wake_examples(self):
+        if self.state!='idle':return
+        self.state='learning';self.cancel=threading.Event()
+        self.emit('thinking',None)
+        def work():
+            try:
+                if self.monitor:self.monitor.pause()
+                if self.cancel.is_set():return
+                self.learning_process=subprocess.Popen([worker_python(),str(ROOT/'collect_wake_examples.py'),'--label','both','--count','10'],cwd=ROOT,
+                    creationflags=getattr(subprocess,'CREATE_NEW_CONSOLE',0))
+                if self.cancel.is_set():self.learning_process.kill()
+                self.learning_process.wait()
+                if self.cancel.is_set():self.emit('cancelled',None);return
+                self.emit('reply',{'text':'Wake collection finished. Reviewed examples remain local; the model has not been changed.','verified':False})
+            finally:self.learning_process=None;self.state='idle';self.emit('finished',None)
+        threading.Thread(target=work,daemon=True).start()
     def finish_recording(self): self.stop_capture.set()
-    def cancel_request(self): self.cancel.set();self.stop_capture.set()
+    def cancel_request(self,reject_approval=True):
+        self.cancel.set();self.stop_capture.set();self.emit('cancelling',None)
+        if self.learning_process is not None and self.learning_process.poll() is None:self.learning_process.kill()
+        if reject_approval and self.reviewed_action:
+            try:self.business.resolve(*self.reviewed_action,approve=False)
+            except ValueError:pass
+            self.reviewed_action=None;self.emit('approval_cancelled',None)
+    def resolve_approval(self,action_id,fingerprint,approve):
+        if self.state!='idle':return
+        self.state='approval';self.cancel=threading.Event();self.reviewed_action=None;self.emit('thinking',None)
+        def work():
+            try:
+                if self.monitor:self.monitor.pause()
+                if self.cancel_listener:self.cancel_listener.start()
+                result=self.business.resolve(action_id,fingerprint,approve,self.cancel)
+                self.emit('reply',{'text':result.get('reply','Action processed.'),'verified':result.get('verified',False)})
+                if result.get('approval_id'):self.emit('approval',self.state_store.get(result['approval_id']))
+            except Exception as exc:self.emit('error',str(exc))
+            finally:
+                if self.cancel_listener:self.cancel_listener.stop()
+                self.state='idle';self.emit('finished',None)
+        threading.Thread(target=work,daemon=True).start()
     def resume_wake(self):
-        if self.monitor and self.wake_enabled and self.state=='idle': self.monitor.resume()
+        if not self.closed and self.monitor and self.wake_enabled and self.state=='idle': self.monitor.resume()
     def close(self):
-        self.closed=True;self.cancel_request()
+        self.closed=True;self.cancel_request(reject_approval=False)
+        if self.cancel_listener:self.cancel_listener.stop()
         if self.monitor: self.monitor.close()

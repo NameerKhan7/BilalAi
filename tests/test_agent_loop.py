@@ -74,6 +74,16 @@ class AgentLoopTests(unittest.TestCase):
         self.brain.run('What is a website?',self.executor)
         self.executor.execute.assert_not_called()
 
+    def test_uncertain_write_blocks_further_mutations(self):
+        self.executor.execute.return_value={'ok':False,'outcome_uncertain':True,'error':'timeout'}
+        self.client.models.generate_content.side_effect=[
+            response(calls=[('gmail_create_draft',{'to':'test@example.org','subject':'Test','body':'body'})]),
+            response(calls=[('notion_create_note',{'parent_id':'page','title':'Test','body':'body'})]),
+            response('The write outcome is uncertain. Please check before retrying.')]
+        self.brain.run('Create a draft and then a note',self.executor)
+        self.executor.execute.assert_called_once()
+        self.assertFalse(self.executor.trace[1]['result']['ok'])
+
     def test_current_request_and_date_context_are_explicit(self):
         self.brain.remember('Play jazz on Spotify','Playing jazz.')
         self.client.models.generate_content.return_value=response('Which app do you mean?')

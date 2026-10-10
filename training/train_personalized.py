@@ -3,7 +3,7 @@ import os
 os.environ['OMP_NUM_THREADS']='1'
 os.environ['OPENBLAS_NUM_THREADS']='1'
 from pathlib import Path
-import sys,json,hashlib,time,warnings
+import sys,json,hashlib,time,warnings,argparse
 import numpy as np
 from scipy.io import wavfile
 from scipy.signal import resample_poly
@@ -14,9 +14,14 @@ from openwakeword.utils import AudioFeatures
 import onnxruntime as ort
 ROOT=Path(__file__).resolve().parent
 sys.path.insert(0,str(ROOT.parent))
-SESSION=ROOT/'recordings/session_02a1911e'
-OUTPUT=ROOT.parent/'models/personalized'
-OUTPUT.mkdir(exist_ok=True)
+parser=argparse.ArgumentParser()
+parser.add_argument('--session',type=Path,default=ROOT/'recordings/session_02a1911e')
+parser.add_argument('--output',type=Path,default=ROOT.parent/'models/candidates'/time.strftime('%Y%m%d_%H%M%S'))
+args=parser.parse_args()
+SESSION=args.session.resolve();OUTPUT=args.output.resolve()
+if OUTPUT==ROOT.parent/'models' or OUTPUT==ROOT.parent/'models/personalized':
+    parser.error('Train to a separate candidate directory; deployment is a separate reviewed action.')
+OUTPUT.mkdir(parents=True,exist_ok=True)
 RNG=np.random.default_rng(417)
 FRAMES=24
 PREFIX=48640
@@ -178,7 +183,7 @@ for number in sorted(set(groups.tolist())):
  print('Held-out recording pair',number,json.dumps(rows),flush=True)
 
 positive=[r['confirmed_score'] for r in folds if r['label']=='hey_bilal']
-negative=[r['confirmed_score'] for r in folds if r['label']=='hee_haa']
+negative=[r['confirmed_score'] for r in folds if r['label']!='hey_bilal']
 threshold=.8
 if min(positive)<threshold or max(negative)>=threshold:
  gap=min(positive)-max(negative)
@@ -186,13 +191,13 @@ if min(positive)<threshold or max(negative)>=threshold:
   threshold=round(float(np.clip((min(positive)+max(negative))/2,.3,.95)),2)
 report={'status':'candidate_requires_fresh_microphone_validation','source_session':str(SESSION.relative_to(ROOT.parent)),
         'threshold':threshold,'consecutive_frames':2,'cooldown_seconds':.6,
-        'cross_validation':'leave one original positive/negative recording pair out; augmentations excluded with their original',
+        'cross_validation':('leave one source session out; augmentations excluded with that session' if any('session' in item for item in items) else 'leave one original recording pair out; augmentations excluded with their original'),
         'initialization':'baseline weights and scaling; full-stream negative examples retained',
         'baseline_sha256':hashlib.sha256((ROOT.parent/'models/hey_bilal.onnx').read_bytes()).hexdigest(),
         'recording_group_count':len(set(groups.tolist())), 'personal_training_windows':len(personal_x),
         'folds':folds,'held_out_positive_hits':sum(s>=threshold for s in positive),'held_out_positive_count':len(positive),
         'held_out_negative_hits':sum(s>=threshold for s in negative),'held_out_negative_count':len(negative),
-        'limitations':['Only five original recordings per class; cross-validation is diagnostic.',
+        'limitations':['Cross-validation is diagnostic; counts and original session separation matter.',
                        'Fresh positive and negative microphone recordings are required before replacing the baseline.',
                        'General background reliability is not established by this personal calibration.']}
 scaler,head=fit_head(np.ones(len(groups),dtype=bool),417)

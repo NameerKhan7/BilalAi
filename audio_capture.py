@@ -94,36 +94,45 @@ class CommandEndpoint:
         return CaptureResult(audio[self.start_index:end].copy(),self.config.sample_rate,reason,True,self.threshold)
 
 
-def capture_command(config=CaptureConfig(), device=None, stop_event=None, on_event=None):
-    """Run in a worker thread. Opens the microphone only for this capture."""
-    import sounddevice as sd
+def capture_command(config=CaptureConfig(),device=None,stop_event=None,on_event=None,stream=None,leading_audio=None):
+    """Capture manually or reuse the already-open wake stream without a microphone gap."""
     stop_event=stop_event or threading.Event()
-    on_event=on_event or (lambda name,data: None)
+    on_event=on_event or (lambda name,data:None)
     on_event('preparing',None)
+    if stream is not None:
+        return _capture_stream(stream,config,stop_event,on_event,leading_audio)
+    import sounddevice as sd
     with sd.RawInputStream(samplerate=config.sample_rate,blocksize=config.block_samples,
-                           dtype='int16',channels=1,device=device,latency='low') as stream:
-        noise=[]
-        blocks=round(config.calibration_seconds*config.sample_rate/config.block_samples)
-        for _ in range(blocks):
-            if stop_event.is_set():
-                return CommandEndpoint(config).finish('manual')
-            raw,overflow=stream.read(config.block_samples)
-            if overflow: raise RuntimeError('Microphone overflow. Close other audio apps and retry.')
-            x=np.frombuffer(raw,dtype=np.int16).astype(np.float32)/32768
-            noise.append(float(np.sqrt(np.mean(x*x))))
-        endpoint=CommandEndpoint(config,float(np.median(noise)) if noise else 0)
-        if stop_event.is_set(): return endpoint.finish('manual')
-        on_event('ready',{'latency_ms':stream.latency*1000,'threshold':endpoint.threshold})
-        frame_count=0
-        while not stop_event.is_set():
-            raw,overflow=stream.read(config.block_samples)
-            if overflow: raise RuntimeError('Microphone overflow. Close other audio apps and retry.')
-            reason=endpoint.feed(np.frombuffer(raw,dtype=np.int16))
-            frame_count+=1
-            if frame_count%5==0:
-                on_event('level',{'rms':endpoint.rms,'speech_detected':endpoint.start_index is not None,'silence_seconds':max(0,(endpoint.total_samples-endpoint.last_speech_end)/config.sample_rate) if endpoint.start_index is not None else 0})
-            if reason is not None: return endpoint.finish()
-        return endpoint.finish('manual')
+                          dtype='int16',channels=1,device=device,latency='low') as opened:
+        return _capture_stream(opened,config,stop_event,on_event,leading_audio)
+
+def _capture_stream(stream,config,stop_event,on_event,leading_audio=None):
+    noise=[]
+    blocks=round(config.calibration_seconds*config.sample_rate/config.block_samples)
+    for _ in range(blocks):
+        if stop_event.is_set():
+            return CommandEndpoint(config).finish('manual')
+        raw,overflow=stream.read(config.block_samples)
+        if overflow: raise RuntimeError('Microphone overflow. Close other audio apps and retry.')
+        x=np.frombuffer(raw,dtype=np.int16).astype(np.float32)/32768
+        noise.append(float(np.sqrt(np.mean(x*x))))
+    endpoint=CommandEndpoint(config,float(np.median(noise)) if noise else 0)
+    if leading_audio is not None:
+        samples=np.asarray(leading_audio,dtype=np.int16)
+        for offset in range(0,len(samples),config.block_samples):
+            endpoint.feed(samples[offset:offset+config.block_samples])
+    if stop_event.is_set(): return endpoint.finish('manual')
+    on_event('ready',{'latency_ms':stream.latency*1000,'threshold':endpoint.threshold})
+    frame_count=0
+    while not stop_event.is_set():
+        raw,overflow=stream.read(config.block_samples)
+        if overflow: raise RuntimeError('Microphone overflow. Close other audio apps and retry.')
+        reason=endpoint.feed(np.frombuffer(raw,dtype=np.int16))
+        frame_count+=1
+        if frame_count%5==0:
+            on_event('level',{'rms':endpoint.rms,'speech_detected':endpoint.start_index is not None,'silence_seconds':max(0,(endpoint.total_samples-endpoint.last_speech_end)/config.sample_rate) if endpoint.start_index is not None else 0})
+        if reason is not None: return endpoint.finish()
+    return endpoint.finish('manual')
 
 
 def encode_wav(audio, sample_rate=16000):

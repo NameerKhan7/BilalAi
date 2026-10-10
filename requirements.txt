@@ -109,3 +109,10 @@ winrt-Windows.Media.Control==3.2.1
 PySide6-Essentials==6.12.0
 PySide6-Addons==6.12.0
 shiboken6==6.12.0
+
+# Authenticated business connectors and public research
+google-auth-oauthlib==1.5.0
+requests-oauthlib==2.0.0
+oauthlib==4.0.0
+beautifulsoup4==4.15.0
+soupsieve==3.0.1

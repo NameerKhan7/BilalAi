@@ -5,7 +5,7 @@ from desktop_worker import DesktopSession
 class DesktopWorkerTests(unittest.TestCase):
     def setUp(self):
         self.session=DesktopSession.__new__(DesktopSession)
-        self.window=Mock();self.window.process_id.return_value=123
+        self.window=Mock();self.window.process_id.return_value=123;self.window.window_text.return_value='Spotify Free'
         self.control=Mock();self.control.window_text.return_value='Play'
         self.control.element_info.control_type='Button'
         self.control.element_info.element.CurrentIsPassword=False

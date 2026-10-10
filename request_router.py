@@ -11,7 +11,7 @@ class RequestProcessor:
 
     def handle(self,query,cancel_event=None):
         from agent_tools import AgentToolExecutor
-        executor=(self.executor_factory or AgentToolExecutor)()
+        executor=self.executor_factory() if self.executor_factory else AgentToolExecutor(state=getattr(self.brain,'state',None))
         reply=self.brain.run(query,executor,cancel_event=cancel_event,on_progress=self.on_progress)
         self.last_trace=list(executor.trace)
         kind='agent' if executor.trace else 'answer'

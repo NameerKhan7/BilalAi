@@ -237,3 +237,9 @@ training/*.json
 
 # Generated UI QA renders
 ui_preview/
+
+# Private learned state, wake examples and encrypted account credentials
+data/
+.secrets/
+
+models/candidates/

@@ -132,7 +132,7 @@ class VoiceWave(QWidget):
 
 class AssistantWindow(QWidget):
     def __init__(self,preview=False):
-        super().__init__();self.preview=preview;self.visual='idle';self.verified=False;self.speech_pending=False
+        super().__init__();self.preview=preview;self.visual='idle';self.verified=False;self.speech_pending=False;self.pending_dialog=None;self.last_wake_sample=None
         self.setWindowTitle('Bilal AI');self.setWindowFlags(Qt.WindowType.FramelessWindowHint|Qt.WindowType.Tool|Qt.WindowType.WindowStaysOnTopHint)
         self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground);self.setFixedSize(96,120)
         self.setStyleSheet(f"QWidget {{font-family:'{THEME['font']}';color:{THEME['text']};}}")
@@ -190,6 +190,10 @@ class AssistantWindow(QWidget):
             self.wake.toggled.connect(wake_action.setChecked)
             voice_action=menu.addAction('Speak replies');voice_action.setCheckable(True);voice_action.setChecked(self.voice.isChecked());voice_action.toggled.connect(self.voice.setChecked)
             self.voice.toggled.connect(voice_action.setChecked)
+            collect=menu.addAction('Collect reviewed wake examples');collect.triggered.connect(self.controller.collect_wake_examples)
+            pending=menu.addAction('Pending approvals');pending.triggered.connect(self.show_pending)
+            correct=menu.addAction('Last wake was correct');correct.triggered.connect(lambda:self.label_wake('positive'))
+            false=menu.addAction('Last wake was a false trigger');false.triggered.connect(lambda:self.label_wake('negative'))
             clear=menu.addAction('Clear conversation');clear.triggered.connect(self.clear_conversation)
             quit_action=menu.addAction('Quit Bilal');quit_action.triggered.connect(self.quit)
             self.tray.setContextMenu(menu);self.tray.setToolTip('Bilal AI — your desktop companion')
@@ -211,12 +215,49 @@ class AssistantWindow(QWidget):
     def show_details(self):
         if self.details is None:
             self.details=QDialog()
-            self.details.setWindowTitle('Bilal conversation')
+            self.details.setWindowTitle('Bilal AI Conversation')
             self.details.setStyleSheet(f"background:{THEME['background']};color:{THEME['text']};")
             layout=QVBoxLayout(self.details);layout.setContentsMargins(0,0,0,0);layout.addWidget(self.card)
             self.hide_button.clicked.disconnect();self.hide_button.clicked.connect(self.details.hide)
             self.card.show();self.details.resize(430,470)
         self.details.show();self.details.raise_();self.details.activateWindow()
+    def label_wake(self,label):
+        monitor=self.controller.monitor
+        sample=self.last_wake_sample or (monitor.last_sample if monitor else None)
+        if sample and monitor:
+            monitor.examples.label(sample,label)
+            self.setToolTip('Wake feedback saved locally. No model was changed automatically.')
+    def show_pending(self):
+        pending=self.controller.state_store.pending()
+        if pending:self.show_approval(pending[0])
+    def show_approval(self,row):
+        if self.pending_dialog is not None:return
+        dialog=QDialog(self);dialog.setWindowTitle('Bilal AI Approval');dialog.resize(480,440)
+        dialog.setStyleSheet(f"background:{THEME['background']};color:{THEME['text']};")
+        layout=QVBoxLayout(dialog)
+        heading=QLabel('Review before sending' if row['kind']=='gmail_send' else 'Confirm what Bilal should remember')
+        heading.setStyleSheet('font-size:18px;font-weight:600;');layout.addWidget(heading)
+        text=QTextBrowser();text.setStyleSheet('border:0;font-size:13px;')
+        payload=row['payload']
+        if row['kind']=='gmail_send':
+            message=payload['message']
+            text.setPlainText('From: '+(message.get('from') or 'Connected Gmail account')+'\nTo: '+message['to']+'\nCc: '+message.get('cc','')+'\nBcc: '+message.get('bcc','')+'\nSubject: '+message['subject']+'\n\n'+message['body'])
+        else:text.setPlainText(payload['key']+'\n\n'+payload['value'])
+        layout.addWidget(text);buttons=QHBoxLayout()
+        approve=QPushButton('Approve sending' if row['kind']=='gmail_send' else 'Remember this')
+        reject=QPushButton('Reject')
+        approve.setStyleSheet(f'background:{THEME["accent"]};color:#23150B;border-radius:9px;padding:11px;font-weight:600;')
+        reject.setStyleSheet('background:#292629;border-radius:9px;padding:11px;')
+        buttons.addWidget(reject);buttons.addWidget(approve);layout.addLayout(buttons)
+        dialog.handled=False
+        def resolve(decision):
+            if dialog.handled or getattr(self,'shutting_down',False):return
+            dialog.handled=True;self.pending_dialog=None
+            if self.speech:self.speech.stop()
+            dialog.close();self.controller.resolve_approval(row['id'],row['digest'],decision)
+        approve.clicked.connect(lambda:resolve(True));reject.clicked.connect(lambda:resolve(False));dialog.rejected.connect(lambda:resolve(False))
+        self.controller.reviewed_action=(row['id'],row['digest']);self.pending_dialog=dialog
+        dialog.show();dialog.raise_()
     def busy(self,value):
         self.send.setEnabled(not value);self.input.setReadOnly(value);self.cancel.setVisible(value)
         self.mic.setEnabled(not value or self.visual=='listening')
@@ -239,6 +280,14 @@ class AssistantWindow(QWidget):
     def handle_event(self,name,data):
         if name=='wake' and self.controller.state=='idle':
             self.show_center();self.reply.hide();self.transcript.hide();self.controller.record(from_wake=True)
+        elif name=='wake_activated':
+            self.last_wake_sample=data.get('sample_id')
+            self.show_center();self.reply.hide();self.transcript.hide()
+        elif name=='approval':self.show_approval(data)
+        elif name=='approval_cancelled':
+            if self.pending_dialog:
+                self.pending_dialog.handled=True;self.pending_dialog.close();self.pending_dialog=None
+        elif name=='cancelling':self.set_visual('inactive','Stopping pending actions.')
         elif name=='wake_ready':
             if self.tray:self.tray.setToolTip('Bilal AI ? listening for Hey Bilal')
             self.save_runtime_status()
@@ -296,6 +345,7 @@ class AssistantWindow(QWidget):
         # Check again after the brief completion pose: a new wake must cancel dismissal.
         QTimer.singleShot(220,self.hide_if_idle)
     def hide_if_idle(self):
+        if self.pending_dialog is not None and self.pending_dialog.isVisible():return
         if self.controller and self.controller.state=='idle' and not self.speech_pending:
             if not self.speech or self.speech.state()!=QTextToSpeech.State.Speaking:
                 self.hide()

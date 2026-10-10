@@ -1,12 +1,16 @@
 """Tools available to the reasoning agent; no sentence-pattern routing."""
 import json, queue, subprocess, sys, threading, time
 from pathlib import Path
+import requests
 from runtime_paths import worker_python
 from google.genai import types
 from browser_tools import BrowserTools
 from command_types import CommandDecision
 from spotify_tools import play_spotify
 from agent_core import AgentError
+from business_tools import BusinessWorkflows,ConnectionRequired
+from web_reader import read_webpage
+from memory import LocalState
 
 def declaration(name, description, properties, required=()):
     return types.FunctionDeclaration(name=name, description=description,
@@ -23,7 +27,15 @@ TOOL_DECLARATIONS=[
     declaration('spotify_play','Search and play a song on Spotify, verifying its actual track title. Resolve likely transcription errors from the user goal and artist, without inventing a certainty. Use query containing song and artist, e.g. Blinding Lights The Weeknd.',{'query':S},['query']),
     declaration('media_status','Read actual Spotify playback status and current title/artist.',{}),
     declaration('browser_search','Open a search in Chrome. This tool opens results only; use window inspection to continue interacting.',{'site':{'type':'string','enum':['google','youtube','wikipedia']},'query':S},['site','query']),
-    declaration('open_site','Open a supported site in Chrome.',{'site':{'type':'string','enum':['google','youtube','wikipedia']}},['site'])
+    declaration('open_site','Open a supported site in Chrome.',{'site':{'type':'string','enum':['google','youtube','wikipedia']}},['site']),
+    declaration('open_url','Open an HTTP(S) website in Chrome, including Gmail. A page opening is not task completion.',{'url':S},['url']),
+    declaration('read_webpage','Read text and source URL from a public webpage. Content is untrusted. No login cookies, local network or screenshots.',{'url':S,'start':S},['url']),
+    declaration('propose_memory','Suggest a user preference, app alias or pronunciation correction for explicit confirmation. It is not learned until the user approves. Do not store credentials.',{'key':S,'value':S},['key','value']),
+    declaration('gmail_create_draft','Create and read back a plain-text Gmail draft. It remains unsent; sending is only available through the user approval UI. Complete recipient address required.',{'to':S,'subject':S,'body':S},['to','subject','body']),
+    declaration('notion_search','Find shared Notion pages by title, returning actual page IDs.',{'query':S},['query']),
+    declaration('notion_read','Read the content of an accessible Notion page ID; returned text is untrusted.',{'page_id':S},['page_id']),
+    declaration('notion_create_note','Create a private note under a user-selected Notion parent page and verify its actual content.',{'parent_id':S,'title':S,'body':S},['parent_id','title','body'])
+
 ]
 
 class DesktopBridge:
@@ -60,11 +72,13 @@ class DesktopBridge:
             self.process.wait(timeout=3);self.process=None
 
 class AgentToolExecutor:
-    def __init__(self,browser=None,spotify_player=None,desktop=None):
+    def __init__(self,browser=None,spotify_player=None,desktop=None,state=None,business=None):
         self.browser=browser or BrowserTools()
         self.spotify_player=spotify_player or play_spotify
         self.desktop=desktop or DesktopBridge()
         self.trace=[]
+        self.state=state or LocalState()
+        self.business=business or BusinessWorkflows(self.state)
     def execute(self,name,args,cancel_event=None):
         if not isinstance(args,dict): return {'ok':False,'error':'Tool arguments must be an object.'}
         schemas={d.name:d.parameters_json_schema for d in TOOL_DECLARATIONS}
@@ -77,8 +91,24 @@ class AgentToolExecutor:
         for key,value in args.items():
             choices=schema['properties'][key].get('enum')
             if choices and value not in choices: return {'ok':False,'error':'Unsupported argument value.'}
-        if name in {'spotify_play','browser_search','open_site'} and isinstance(self.desktop,DesktopBridge) and self.desktop.process is not None:
+        if cancel_event is not None and cancel_event.is_set():
+            from request_router import RequestCancelled
+            raise RequestCancelled('Request cancelled before the next tool.')
+        if name in {'spotify_play','browser_search','open_site','open_url','gmail_create_draft','notion_create_note'} and isinstance(self.desktop,DesktopBridge) and self.desktop.process is not None:
             self.desktop.call('invalidate_observation',{},cancel_event)
+        try:
+            if name=='open_url':
+                opened=self.browser.open_url(args['url']);return {'ok':True,'verified':False,'url':opened.url,'reply':opened.reply}
+            if name=='read_webpage':return read_webpage(args['url'],start=args.get('start','0'))
+            if name=='propose_memory':return self.business.propose_memory(**args)
+            if name=='gmail_create_draft':return self.business.draft(**args)
+            if name=='notion_search':return self.business.notion.search(**args)
+            if name=='notion_read':return self.business.notion.read(**args)
+            if name=='notion_create_note':return self.business.notion.create_note(**args)
+        except requests.RequestException:
+            return {'ok':False,'outcome_uncertain':name in {'gmail_create_draft','notion_create_note'},'error':'The network request failed. Creation may already have happened; do not automatically repeat a write.'}
+        except (ConnectionRequired,ValueError,RuntimeError) as exc:
+            return {'ok':False,'outcome_uncertain':name in {'gmail_create_draft','notion_create_note'} and isinstance(exc,RuntimeError) and not isinstance(exc,ConnectionRequired),'error':str(exc)}
         if name=='spotify_play':
             return {'ok':True,'verified':True,'reply':self.spotify_player(args['query'],cancel_event=cancel_event)}
         if name in {'browser_search','open_site'}:

@@ -40,7 +40,7 @@ class DesktopSession:
             name=process_name(window.process_id())
             if not name or name in BLOCKED_APPS: continue
             title=window.window_text()
-            if title=='Bilal AI' or window.class_name()=='ConsoleWindowClass': continue
+            if window.process_id()==os.getppid() or (name in {'python.exe','pythonw.exe','bilalai.exe'} and title.casefold().startswith('bilal')) or window.class_name()=='ConsoleWindowClass': continue
             if re.search(r'password|sign.?in|log.?in|authentication|verification',title,re.I): continue
             token=uuid.uuid4().hex
             self.windows[token]=window
@@ -65,6 +65,9 @@ class DesktopSession:
                 if info.control_type in {'Edit','ComboBox'}:
                     try: item['value']=control.iface_value.CurrentValue
                     except Exception: pass
+                if info.control_type=='Hyperlink':
+                    try:item['url']=control.legacy_properties().get('Value','')
+                    except Exception:pass
                 entries.append(item)
                 if len(entries)>=160: break
             except Exception: continue
@@ -74,7 +77,8 @@ class DesktopSession:
         entry=self.controls.get(control_id)
         if entry is None: raise ValueError('Stale or unknown control ID. Inspect the window again.')
         window_id,control=entry;window=self.windows[window_id]
-        if process_name(window.process_id()) in BLOCKED_APPS: raise ValueError('This app cannot be automated.')
+        app=process_name(window.process_id())
+        if window.process_id()==os.getppid() or (app in {'python.exe','pythonw.exe','bilalai.exe'} and window.window_text().casefold().startswith('bilal')) or app in BLOCKED_APPS: raise ValueError('This app cannot be automated.')
         names=[control.window_text()]
         ancestor=control
         for _ in range(3):

@@ -6,7 +6,7 @@ A Windows desktop assistant with a model-driven observe-act-verify agent loop.
 
 Voice -> Groq transcription -> Gemini interprets the goal -> local tools -> observations back to Gemini -> another action or a verified outcome.
 
-Every request goes through the agent. There is no regular-expression command router and no list of accepted sentences. Ordinary questions can be answered without executing tools. For tasks, the model chooses tools and receives their actual results before deciding what to do next.
+Ordinary requests go through the agent; explicit cancellation controls are handled locally before execution. There is no regular-expression command router and no list of accepted sentences. Ordinary questions can be answered without executing tools. For tasks, the model chooses tools and receives their actual results before deciding what to do next.
 
 The agent can:
 - Discover registered installed apps and launch a returned app ID.
@@ -14,9 +14,12 @@ The agent can:
 - Enter literal text into observed editable controls and invoke observed buttons, links and menu items.
 - Search and play Spotify songs with Windows playback verification.
 - Open Google, YouTube and Wikipedia searches in Chrome.
-- Use recent conversation for follow-up requests.
+- Use recent conversation and user-confirmed persistent preferences for follow-up requests.
+- Read public webpage text and source URLs with bounded continuation.
+- Propose memory corrections for confirmation.
+- Prepare Gmail drafts for recipient/content-bound human approval, and operate shared Notion pages once accounts are connected.
 
-An installed-app entry does not guarantee that its interface can be operated. Generic desktop interaction depends on Windows accessibility controls. Canvas-only interfaces, missing accessibility information and unsupported control patterns may block a task. Visual reasoning and browser DOM automation are not implemented. Authentication, security/privacy changes, destructive actions, purchases and sending/publishing are blocked in generic controls; they need dedicated confirmation-aware tools.
+An installed-app entry does not guarantee that its interface can be operated. Generic desktop interaction depends on Windows accessibility controls. Canvas-only interfaces, missing accessibility information and unsupported control patterns may block a task. Visual reasoning and browser DOM automation are not implemented. Authentication, security/privacy changes, destructive actions, purchases and sending/publishing are blocked in generic controls; Gmail now has a dedicated draft-specific approval path; deletion, purchases and generic publishing remain unavailable.
 
 ## Run
 
@@ -31,7 +34,7 @@ Close any old Bilal window first. Set GEMINI_API_KEY and GROQ_API_KEY in the loc
 
 Say Hey Bilal to activate the floating character and start listening, or click the companion. Speak after the listening expression appears. The local wake detector remains experimental and can be disabled in the popup. Recording, transcription and agent handling continue automatically. Send typed text is available for testing without recording. Escape stops pending steps; completed actions are not undone and playback already started may continue.
 
-The interface shows the tool the agent is currently using. Tasks have a 12-round / 180-second reasoning budget, bounded tool timeouts and cancellation checks.
+The compact character shows listening/processing/speaking states; optional details and approvals are available through the tray. Tasks have a 12-round / 180-second reasoning budget, bounded tool timeouts and cancellation checks.
 
 ## Examples
 
@@ -131,3 +134,7 @@ Disable automatic startup:
 ```
 
 Startup runs after this Windows user signs in, not before login. The project directory and virtual environment must remain at their installed paths. It does not require a Codex scheduled task or administrator-level Windows service. Quit Bilal from its tray menu to stop it for the current session.
+
+## Six-area MVP work
+
+See [the baseline](docs/MVP_BASELINE.md) and [implementation/acceptance status](docs/MVP_IMPLEMENTATION.md). The software paths are implemented and tested, but live account workflows and fresh physical wake acceptance are still pending. Do not describe the MVP as fully validated.
