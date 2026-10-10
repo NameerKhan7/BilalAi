@@ -1,13 +1,14 @@
-﻿# BilalAI
+# BilalAI
 
 A Python voice assistant for Windows, under active development.
 
 Current features:
+- Push-to-talk command recorder with automatic silence stopping, local WAV saving and playback.
 - An experimental local `hey Bilal` wake-word detector and microphone test.
 - Local voice-calibration tools, with a separate personalized candidate profile.
 - CPU training and regression-check utilities.
 
-Wake-word recognition is still experimental. Push-to-talk command recording is the next MVP milestone. Transcription, model answers, spoken replies, desktop actions and tray controls are not connected yet.
+Wake-word recognition is still experimental. Push-to-talk recording is available as the reliable manual activation path. Transcription, model answers, spoken replies, desktop actions and tray controls are not connected yet.
 
 ## Run the baseline
 
@@ -22,6 +23,30 @@ python -m venv venv
 Say `hey Bilal`, then try normal conversation and similar phrases. The baseline uses a 0.80 threshold, two consecutive matching frames, and a 0.6-second repeat cooldown. The terminal displays microphone and processing latency.
 
 The configuration file `config/config.yaml` currently contains JSON-compatible YAML. The shared audio feature models and synthetic baseline classifier are included under `models/`.
+
+## Test command recording
+
+```powershell
+.\venv\Scripts\python.exe .\main.py
+```
+
+Or double-click `test_command_recording.bat`. In the recorder window:
+
+1. Click Record command or press Space.
+2. Wait for Speak now.
+3. Say: Open YouTube and search for Pakistani food.
+4. Stop speaking and wait for automatic stopping after one second of silence.
+5. Click Play recording and verify that the entire sentence is clear, including its first and last words.
+
+Space again or Escape stops recording manually. Nothing spoken is executed yet. The recorder waits up to six seconds for speech and limits a command to fifteen seconds. Recordings stay local in the ignored `recordings/` folder. It briefly measures room noise before showing Speak now, so wait for that prompt before talking.
+
+Repeat with three different sentences. If Windows blocks the microphone, enable microphone access for desktop apps in Windows Settings. The next milestone is speech-to-text after this recording test passes.
+
+Automated recording-boundary and encoding checks:
+
+```powershell
+.\venv\Scripts\python.exe -m unittest discover -s tests -v
+```
 
 ## Voice calibration
 
