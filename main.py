@@ -239,6 +239,12 @@ class AssistantWindow(QWidget):
     def handle_event(self,name,data):
         if name=='wake' and self.controller.state=='idle':
             self.show_center();self.reply.hide();self.transcript.hide();self.controller.record(from_wake=True)
+        elif name=='wake_ready':
+            if self.tray:self.tray.setToolTip('Bilal AI ? listening for Hey Bilal')
+            self.save_runtime_status()
+        elif name=='wake_retry':
+            if self.tray:self.tray.setToolTip('Bilal AI ? waiting for microphone, retrying')
+            self.save_runtime_status()
         elif name=='wake_error':
             self.wake.setChecked(False);self.subtitle.setText(data)
         elif name=='preparing':
@@ -318,6 +324,14 @@ class AssistantWindow(QWidget):
         self.controller.brain.clear();self.reply.clear();self.reply.hide();self.transcript.clear();self.transcript.hide()
         self.set_visual('idle','A fresh conversation. Ready when you are.')
 
+    def save_runtime_status(self):
+        if self.preview:return
+        monitor=self.controller.monitor
+        try:
+            (ROOT/'logs/ui_startup.json').write_text(json.dumps({'pid':os.getpid(),'visible':self.isVisible(),
+                'size':[self.width(),self.height()],'speech_engine':self.speech.engine() if self.speech else None,
+                'wake_enabled':self.wake.isChecked(),'wake_status':monitor.status if monitor else 'disabled'}),encoding='utf-8')
+        except OSError:pass
     def quit(self):
         if getattr(self,'shutting_down',False):return
         self.shutting_down=True
@@ -360,10 +374,7 @@ def main():
         window.show_center();window.setWindowOpacity(1);app.processEvents();window.grab().save(str(output/'result.png'))
         print('Rendered eight UI states and a result preview in ui_preview/.');return
     window.hide()  # Wake monitoring and the tray remain active while the avatar is hidden.
-    def startup_status():
-        (ROOT/'logs/ui_startup.json').write_text(json.dumps({'visible':window.isVisible(),'size':[window.width(),window.height()],
-            'speech_engine':window.speech.engine() if window.speech else None,'wake_enabled':window.wake.isChecked()}),encoding='utf-8')
-    QTimer.singleShot(2000,startup_status)
+    QTimer.singleShot(2000,window.save_runtime_status)
     run_ui(app,window)
 
 def run_ui(app,window):

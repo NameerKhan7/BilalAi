@@ -1,5 +1,6 @@
 """Bounded Spotify executor with cancellation and a separate Windows process."""
 from pathlib import Path
+from runtime_paths import worker_python
 import json, subprocess, sys, time
 from app_tools import AppLaunchError
 
@@ -9,7 +10,7 @@ def play_spotify(query, cancel_event=None):
     query=query.strip()
     if not query or len(query)>400:
         raise SpotifyActionError('Specify a Spotify search under 400 characters.')
-    with subprocess.Popen([sys.executable,str(Path(__file__).with_name('spotify_worker.py'))],
+    with subprocess.Popen([worker_python(),str(Path(__file__).with_name('spotify_worker.py'))],
             stdin=subprocess.PIPE,stdout=subprocess.PIPE,stderr=subprocess.PIPE,
             text=True,encoding='utf-8',shell=False,
             creationflags=getattr(subprocess,'CREATE_NO_WINDOW',0)) as worker:

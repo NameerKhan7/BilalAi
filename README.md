@@ -111,3 +111,23 @@ logs/agent_latest.json points to the latest real task trace, including start tim
 The companion starts hidden while local wake-word monitoring stays active. A wake or manually initiated request reveals it. It stays visible through recording, execution and spoken output, then hides automatically after completion. Pending speech prevents early dismissal; a new request prevents an older dismissal timer from hiding an active task. The tray remains available while the avatar is hidden.
 
 Ctrl+C in the launching terminal requests a clean GUI shutdown. The signal handler does not raise inside animation callbacks; a GUI timer stops animation, speech and pending processing. Painter scopes always release their drawing device, including on exceptions. Quit Bilal from the tray is also supported.
+
+## Start automatically with Windows
+
+Windows sign-in startup is installed for the current user through a Bilal AI.lnk shortcut in Windows' configured Startup folder. It points to this project's venv/Scripts/pythonw.exe and launch_bilal.pyw, so no console window opens. The avatar stays hidden while local Hey Bilal listening is active; spoken replies use the default Windows audio output. Single-instance locking prevents duplicate microphones/windows.
+
+Microphone startup failures retry automatically with a bounded delay. JSON tool workers explicitly use the console Python interpreter with CREATE_NO_WINDOW, so background startup does not break their standard input/output. Diagnostics go to the ignored logs/background.log and logs/ui_startup.json files.
+
+Install/update startup:
+
+```powershell
+.\venv\Scripts\python.exe .\startup_windows.py
+```
+
+Disable automatic startup:
+
+```powershell
+.\venv\Scripts\python.exe .\startup_windows.py --remove
+```
+
+Startup runs after this Windows user signs in, not before login. The project directory and virtual environment must remain at their installed paths. It does not require a Codex scheduled task or administrator-level Windows service. Quit Bilal from its tray menu to stop it for the current session.

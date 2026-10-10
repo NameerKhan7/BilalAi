@@ -1,6 +1,7 @@
 """Tools available to the reasoning agent; no sentence-pattern routing."""
 import json, queue, subprocess, sys, threading, time
 from pathlib import Path
+from runtime_paths import worker_python
 from google.genai import types
 from browser_tools import BrowserTools
 from command_types import CommandDecision
@@ -35,7 +36,7 @@ class DesktopBridge:
         responses.put(None)
     def call(self,name,args,cancel_event=None):
         if self.process is None:
-            self.process=subprocess.Popen([sys.executable,str(Path(__file__).with_name('desktop_worker.py'))],
+            self.process=subprocess.Popen([worker_python(),str(Path(__file__).with_name('desktop_worker.py'))],
                 stdin=subprocess.PIPE,stdout=subprocess.PIPE,stderr=subprocess.DEVNULL,text=True,
                 encoding='utf-8',shell=False,creationflags=getattr(subprocess,'CREATE_NO_WINDOW',0))
             self.responses=queue.Queue()
