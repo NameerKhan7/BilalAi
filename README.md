@@ -4,12 +4,13 @@ A Python voice assistant for Windows, under active development.
 
 Current features:
 - Push-to-talk command recorder with automatic silence stopping, local WAV saving and playback.
-- Explicit Groq transcription with a transcript display and locally saved text.
+- Explicit Groq transcription with an editable transcript and locally saved text.
+- Gemini answers with short replies, bounded follow-up context and a Clear chat control.
 - An experimental local `hey Bilal` wake-word detector and microphone test.
 - Local voice-calibration tools, with a separate personalized candidate profile.
 - CPU training and regression-check utilities.
 
-Wake-word recognition is still experimental. Push-to-talk recording is available as the reliable manual activation path. Model answers, spoken replies, desktop actions and tray controls are not connected yet.
+Wake-word recognition is still experimental. Push-to-talk recording is available as the reliable manual activation path. Spoken replies, desktop actions and tray controls are not connected yet.
 
 ## Run the baseline
 
@@ -57,7 +58,17 @@ Set `GROQ_API_KEY` in your local `.env` file; `.env.example` shows the required 
 
 The transcript appears in the window and is saved beside its WAV under the ignored `recordings/` folder. Missing keys, rejected credentials, connection errors, timeouts and usage limits produce a retryable message. No spoken command is executed yet.
 
-Test three different commands in your usual voice and confirm that the complete meaning is preserved. The service connection was verified with generated speech; no private microphone clip was uploaded during development tests. After your voice passes transcription, the next milestone is connecting model answers.
+Test three different commands in your usual voice and confirm that the complete meaning is preserved. The service connection was verified with generated speech; no private microphone clip was uploaded during development tests. After your voice passes transcription, the next milestone is testing Gemini answers below.
+
+## Test Gemini answers
+
+The local GEMINI_API_KEY was verified with model listing and text generation. The installed google-genai SDK uses gemini-3.5-flash-lite, listed with free-tier access subject to project quota. The code does not reject keys by prefix or enable paid billing. Sources: https://ai.google.dev/gemini-api/docs/api-key and https://ai.google.dev/gemini-api/docs/pricing.
+
+Close the old window and relaunch main.py. Record, Transcribe, review or edit the text, then click Ask Bilal. You can also type a question directly. Ask Bilal sends text and up to six recent question/answer pairs to Gemini, without sending the WAV to Gemini. Transcribe separately sends the WAV to Groq.
+
+Try a question, then a follow-up: Remember that my test code word is mango; What code word did I mention? Replies appear in the right pane. Clear chat or closing the app resets session context. Replies associated with a recording are saved locally as .answer.txt beside its WAV. Desktop actions, live web lookup and spoken replies are not connected yet.
+
+GEMINI_MODEL optionally overrides the tested model. Missing keys, quota errors, unavailable models and connection failures produce safe retryable messages. Local text-to-speech is the next milestone after this test.
 
 ## Voice calibration
 
