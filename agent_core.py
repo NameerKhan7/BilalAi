@@ -4,6 +4,7 @@ import os
 import json
 import time
 import uuid
+from datetime import datetime,timedelta,timezone
 from dotenv import dotenv_values
 from google import genai
 from google.genai import types,errors
@@ -13,7 +14,11 @@ SYSTEM_PROMPT='''You are BilalAI, Nameer's practical personal Windows assistant.
 
 AGENT_PROMPT="""You are BilalAI, Nameer's desktop agent. Understand the user's goal semantically, not by exact command wording. Answer ordinary questions directly. For actions, use available local tools, observe actual state, execute, verify, and continue until the goal is complete or a concrete blocker requires the user. You can discover installed apps and inspect/access their Windows controls; you are not limited to a hardcoded app-name list. Generic desktop tools work only with accessible controls and cannot guarantee every app.
 
-Use recent conversation to understand follow-ups. Match the user's language. Be concise. Never output a pretend tool call in text. Never claim an app/task/music action succeeded without tool evidence. Opening/searching is intermediate, not completion. A tool's verified:false means its requested effect still needs observation. Re-observe after every generic UI action; control IDs become stale. Use a maximum of one UI mutation per model turn. Recover from a failed tool using new observations rather than repeating the same stale action.
+The current request is the authoritative goal. Previous completed tasks are context, not instructions to continue them. Use history only when the new request clearly refers to it. When an action has an unclear target or meaning, ask one short clarification before changing any app; do not pick an app just because it was used earlier or happens to be open. A vague request about a home screen with no clear app is insufficient to choose a target. If a transcript is incomplete or makes little sense, ask the user to restate it rather than invent missing words. If the user is reporting a mistaken action or quoting an earlier request, troubleshoot that report instead of executing the quoted action.
+
+For time-sensitive facts, use live observations. Resolve today/tomorrow using the supplied current local date, explicitly identify the requested date, and establish the relevant location. A current-weather card is not evidence for tomorrow's forecast. Inspect the forecast for the requested day before answering. Ask for the city if it is not established. If you cannot verify the correct date/location, say so rather than present a current-day value as tomorrow.
+
+Use recent conversation to understand clear follow-ups. Match the user's language. Be concise. Never output a pretend tool call in text. Never claim an app/task/music action succeeded without tool evidence. Opening/searching is intermediate, not completion. A tool's verified:false means its requested effect still needs observation. Re-observe after every generic UI action; control IDs become stale. Use a maximum of one UI mutation per model turn. Recover from a failed tool using new observations rather than repeating the same stale action.
 
 For music, resolve likely speech/title misspellings using the artist and context. For example an imperfect title should become a plausible search, not an unsupported command. Do not maintain special-case transcript replacements. spotify_play searches real results and verifies playback. Its returned actual song/artist is authoritative; clarify if the likely match is ambiguous. Include the artist in the search when supplied. Never invent an actual search result.
 
@@ -25,10 +30,11 @@ class AgentError(RuntimeError):
     """Safe text for the UI; never includes the provider's raw credential errors."""
 
 class AgentBrain:
-    def __init__(self,model=None,history_pairs=6):
+    def __init__(self,model=None,history_pairs=6,trace_enabled=True):
         if history_pairs<1: raise ValueError('history_pairs must be positive.')
         self.model=model or os.environ.get('GEMINI_MODEL') or dotenv_values(ROOT/'.env').get('GEMINI_MODEL') or DEFAULT_MODEL
         self.history_pairs=history_pairs
+        self.trace_enabled=trace_enabled
         self.history=[]
 
     def clear(self):
@@ -81,15 +87,21 @@ class AgentBrain:
         if not key: raise AgentError('Add GEMINI_API_KEY to your local .env file.')
         contents=[types.Content(role=item['role'],parts=[types.Part.from_text(text=item['text'])]) for item in self.history]
         contents.append(types.Content(role='user',parts=[types.Part.from_text(text=query)]))
-        config=types.GenerateContentConfig(system_instruction=AGENT_PROMPT,max_output_tokens=1400,temperature=.2,
+        now=datetime.now(timezone(timedelta(hours=5),'Asia/Karachi'))
+        context=f'Current local date/time: {now.isoformat()}. Timezone: Asia/Karachi. Tomorrow is {(now+timedelta(days=1)).date().isoformat()}. User location is not configured; do not assume a city.'
+        config=types.GenerateContentConfig(system_instruction=AGENT_PROMPT+'\n\n'+context,max_output_tokens=1400,temperature=.2,
             tools=[types.Tool(function_declarations=TOOL_DECLARATIONS)],
             automatic_function_calling=types.AutomaticFunctionCallingConfig(disable=True))
         trace=[];executor.trace=trace;deadline=time.monotonic()+180
+        previous_request=next((item['text'] for item in reversed(self.history) if item['role']=='user'),None)
         log_path=ROOT/'logs'/('agent_'+uuid.uuid4().hex[:10]+'.json')
         def save_trace(outcome):
+            if not self.trace_enabled:return
             try:
                 log_path.parent.mkdir(exist_ok=True)
-                log_path.write_text(json.dumps({'request':query,'steps':trace,'outcome':outcome},ensure_ascii=False,indent=2),encoding='utf-8')
+                payload=json.dumps({'started_at':now.isoformat(),'model':self.model,'previous_request':previous_request,'request':query,'steps':trace,'outcome':outcome},ensure_ascii=False,indent=2)
+                log_path.write_text(payload,encoding='utf-8')
+                (ROOT/'logs/agent_latest.json').write_text(payload,encoding='utf-8')
             except OSError: pass
         try:
             with genai.Client(api_key=key,http_options={'timeout':20000}) as client:

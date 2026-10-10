@@ -17,7 +17,7 @@ class AgentLoopTests(unittest.TestCase):
         self.factory=patch('agent_core.genai.Client');self.create=self.factory.start()
         self.client=self.create.return_value.__enter__.return_value
         self.executor=Mock();self.executor.execute.return_value={'ok':True,'verified':True}
-        self.brain=AgentBrain()
+        self.brain=AgentBrain(trace_enabled=False)
     def tearDown(self):
         self.factory.stop();self.values.stop();self.env.stop()
 
@@ -72,6 +72,17 @@ class AgentLoopTests(unittest.TestCase):
     def test_question_needs_no_desktop_action(self):
         self.client.models.generate_content.return_value=response('A website presents content.')
         self.brain.run('What is a website?',self.executor)
+        self.executor.execute.assert_not_called()
+
+    def test_current_request_and_date_context_are_explicit(self):
+        self.brain.remember('Play jazz on Spotify','Playing jazz.')
+        self.client.models.generate_content.return_value=response('Which app do you mean?')
+        self.brain.run('So I want you to start on home.',self.executor)
+        request=self.client.models.generate_content.call_args.kwargs
+        self.assertEqual(request['contents'][-1].parts[0].text,'So I want you to start on home.')
+        self.assertIn('Previous completed tasks are context',request['config'].system_instruction)
+        self.assertIn('Current local date/time:',request['config'].system_instruction)
+        self.assertIn('Tomorrow is ',request['config'].system_instruction)
         self.executor.execute.assert_not_called()
 
     def test_unknown_tools_and_extra_args_cannot_execute(self):

@@ -101,3 +101,9 @@ Render all states without microphone or API usage:
 Screenshots are saved in the ignored ui_preview/ directory. Character assets and their prompts are documented in assets/character/ASSET_NOTES.md.
 
 The previous large card is hidden by default. Controls, typed requests and full replies are available only on demand through the tray menu. The character stays anchored while its head, eyes and mouth animate; vertical bobbing is disabled. Speech word events animate the mouth where supported, with a speaking-state fallback. This is a 2D animated sprite implementation, not a rigged 3D character.
+
+## Request grounding and diagnostics
+
+The current request takes precedence over completed tasks in conversation history. Ambiguous app targets should trigger clarification before an app is changed. Reports about a mistaken action are treated as reports, not new commands to execute their quoted text. Each reasoning run receives current Asia/Karachi date/time and tomorrow's calendar date; weather answers must establish the city and inspect the requested forecast day.
+
+logs/agent_latest.json points to the latest real task trace, including start time, model, previous request, current request, tool steps and outcome. Unit and diagnostic model tests disable runtime trace writing so they do not become the latest user task. These private files remain excluded from Git.
