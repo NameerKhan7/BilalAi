@@ -1,4 +1,4 @@
-﻿import threading
+import threading
 import unittest
 from unittest.mock import Mock,patch
 from pathlib import Path
@@ -18,6 +18,25 @@ class LocalRequestTests(unittest.TestCase):
         result=self.processor.handle('Hey Bilal, open the Notion app.')
         self.opener.assert_called_once_with('notion');self.brain.ask.assert_not_called()
         self.assertEqual(result.kind,'app')
+
+    def test_actual_spotify_failure_routes_locally(self):
+        self.opener.return_value='Opened Spotify.'
+        result=self.processor.handle('I said I want you to open up the Spotify and play Nog 2.')
+        self.opener.assert_called_once_with('spotify')
+        self.brain.ask.assert_not_called()
+        self.assertEqual(result.kind,'app')
+        self.assertIn('playback are not connected',result.reply)
+
+    def test_polite_wrappers_do_not_send_app_commands_to_gemini(self):
+        self.processor.handle('Could you please open up the Notion app?')
+        self.opener.assert_called_once_with('notion')
+        self.brain.ask.assert_not_called()
+
+    def test_playback_request_does_not_get_fake_gemini_tool_reply(self):
+        result=self.processor.handle('Play some jazz on the Spotify')
+        self.opener.assert_called_once_with('spotify')
+        self.brain.ask.assert_not_called()
+        self.assertIn('not connected',result.reply)
 
     def test_spotify_and_chrome_names_are_recognized(self):
         self.assertEqual(app_command('Please open Spotify'),'spotify')

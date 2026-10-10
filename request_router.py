@@ -10,12 +10,16 @@ class RequestCancelled(RuntimeError): pass
 def normalize_request(text):
     text=text.strip().rstrip('.!?')
     text=re.sub(r'^(?:hey|hi|hello)\s*,?\s*bilal\b[\s,:.!-]*','',text,flags=re.I)
-    return re.sub(r'^(?:(?:please|can you|could you|would you)\s+)+','',text,flags=re.I).strip()
+    for _ in range(5):
+        updated=re.sub(r"^(?:i said(?: that)?|i want you to|i need you to|i would like you to|i'd like you to|please|can you|could you|would you)\s+",'',text,flags=re.I).strip()
+        if updated==text: break
+        text=updated
+    return text
 
 
 def app_command(text):
     text=normalize_request(text)
-    match=re.fullmatch(r'(?:open|launch|start|run)\s+(?:the\s+)?(?:google\s+)?(notion|spotify|chrome)(?:\s+(?:app|application|browser))?',text,re.I)
+    match=re.fullmatch(r'(?:open|launch|start|run)\s+(?:up\s+)?(?:the\s+)?(?:google\s+)?(notion|spotify|chrome)(?:\s+(?:app|application|browser))?(?:\s+and\s+play\s+.+)?',text,re.I)
     if not match:
         match=re.fullmatch(r'(notion|spotify|chrome)\s+(?:kholo|open karo|chalao)',text,re.I)
     return match.group(1).lower() if match else None
@@ -45,8 +49,13 @@ class RequestProcessor:
             if cancel_event is not None and cancel_event.is_set(): raise RequestCancelled('Request cancelled.')
         check_cancel()
         app=app_command(query)
+        playback=re.fullmatch(r'play\s+.+\s+on\s+(?:the\s+)?spotify',normalize_request(query),re.I)
+        if playback: app='spotify'
         if app:
-            result=RequestResult(self.app_opener(app),'app')
+            reply=self.app_opener(app)
+            if playback or re.search(r'\band\s+play\b',normalize_request(query),re.I):
+                reply+=' Track selection and playback are not connected yet.'
+            result=RequestResult(reply,'app')
         else:
             browser=browser_command(query)
             if browser:
