@@ -31,7 +31,7 @@ Voice recording now automatically uploads the selected clip to Groq for transcri
 
 Spotify playback requests now run through a separate local Windows UI Automation worker. Close the old Bilal window and restart main.py after installing requirements.txt. Try "Open Spotify and play jazz" or "Play Blinding Lights by The Weeknd on Spotify". Spotify must be installed and signed in; Bilal never handles login prompts.
 
-The worker opens Spotify's search URI, verifies the search field, invokes a visible named result's Play control, and checks Spotify's Windows media session against the selected title. It reports success only after that verification. A playlist or album result, advertisements, non-English controls, or Spotify versions that do not expose accessible result controls can cause a clear unverified-playback error. This adapter has automated routing and failure checks; live playback still needs validation against the installed Spotify version.
+The worker opens Spotify's search URI, verifies the search field, invokes a visible song row's Play control, and checks Spotify's Windows media session against the selected title. It reports success only after that verification. A playlist or album result, advertisements, non-English controls, or Spotify versions that do not expose accessible result controls can cause a clear unverified-playback error. Live playback was verified on the installed Spotify version: the executor searched for Blinding Lights, invoked its song-row Play button, and Windows reported Blinding Lights by The Weeknd actively playing. Search verification handles Spotify's ComboBox control and encoded spaces. Song selection is scoped to the Search results grid.
 
 For a direct diagnostic test:
 

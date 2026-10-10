@@ -2,7 +2,7 @@ import asyncio
 import json
 import unittest
 from unittest.mock import Mock, patch
-from spotify_worker import matches_title, result_buttons, execute, PlaybackFailure
+from spotify_worker import matches_title, result_buttons, search_matches, execute, PlaybackFailure
 from spotify_tools import play_spotify, SpotifyActionError
 from request_router import RequestProcessor, spotify_command
 
@@ -14,14 +14,27 @@ class SpotifyTests(unittest.TestCase):
         self.assertIsNone(spotify_command("Don't play jazz on Spotify"))
         self.assertIsNone(spotify_command('Open Notion and play jazz'))
 
-    def test_result_selection_excludes_global_transport(self):
-        controls=[]
-        for name in ['Play','Pause','Play Next','Play Blinding Lights']:
-            button=Mock();button.window_text.return_value=name
-            button.is_visible.return_value=True;button.is_enabled.return_value=True
-            controls.append(button)
-        window=Mock();window.descendants.return_value=controls
-        self.assertEqual([name for _,name in result_buttons(window)],['Blinding Lights'])
+    def test_combobox_and_encoded_spaces_are_verified(self):
+        field=Mock();field.is_visible.return_value=True
+        field.iface_value.CurrentValue='Blinding+Lights'
+        window=Mock();window.descendants.side_effect=lambda **kw: [field] if kw['control_type']=='ComboBox' else []
+        self.assertTrue(search_matches(window,'Blinding Lights'))
+        self.assertFalse(search_matches(window,'Different Song'))
+
+    def test_result_selection_uses_song_row_and_generic_play(self):
+        button=Mock();button.window_text.return_value='Play'
+        button.is_visible.return_value=True;button.is_enabled.return_value=True
+        cell=Mock();cell.window_text.return_value='Song\u00a0\u2022\u00a0The Weeknd'
+        link=Mock();link.window_text.return_value='Blinding Lights'
+        row=Mock();row.element_info.control_type='DataItem';row.is_visible.return_value=True
+        row.descendants.side_effect=lambda **kw: {'Button':[button],'DataItem':[cell],'Hyperlink':[link]}[kw['control_type']]
+        grid=Mock();grid.window_text.return_value='Search results';grid.is_visible.return_value=True
+        grid.children.return_value=[row]
+        transport=Mock();transport.window_text.return_value='Player controls'
+        window=Mock();window.descendants.return_value=[transport,grid]
+        self.assertEqual(result_buttons(window),[(button,'Blinding Lights')])
+        cell.window_text.return_value='Single\u00a0\u2022\u00a0The Weeknd'
+        self.assertEqual(result_buttons(window),[])
 
     def test_wrong_current_track_cannot_pass_verification(self):
         self.assertFalse(matches_title('Blinding Lights','Jazz in Paris'))

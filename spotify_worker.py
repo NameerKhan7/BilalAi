@@ -3,7 +3,7 @@ Run: python spotify_worker.py --query "jazz"
 No coordinate clicks, global media keys, generated commands or login automation.
 """
 import argparse, asyncio, ctypes, json, os, re, sys, time
-from urllib.parse import quote
+from urllib.parse import quote, unquote_plus
 from pathlib import Path
 
 STAGE="starting"
@@ -45,15 +45,41 @@ async def media_snapshot():
     return {'title':props.title,'artist':props.artist,
             'playing':session.get_playback_info().playback_status==Status.PLAYING}
 
+def search_matches(window,query):
+    # Chromium exposes Spotify's search field as an ARIA combobox, not an Edit.
+    for kind in ('ComboBox','Edit'):
+        for field in window.descendants(control_type=kind):
+            if not field.is_visible(): continue
+            try: value=field.iface_value.CurrentValue
+            except Exception:
+                try: value=field.get_value()
+                except Exception: continue
+            if value.strip().casefold()==query.casefold(): return True
+            if unquote_plus(value).strip().casefold()==query.casefold(): return True
+    return False
+
+
 def result_buttons(window):
+    # Scope to the observed Search results grid, excluding library/player controls.
+    grids=[g for g in window.descendants(control_type='DataGrid')
+           if g.window_text()=='Search results' and g.is_visible()]
+    if len(grids)!=1: return []
     candidates=[]
-    for button in window.descendants(control_type='Button'):
-        match=re.fullmatch(r'Play\s+(.+)',button.window_text().strip(),re.I)
-        if not match or not button.is_visible() or not button.is_enabled(): continue
-        title=match.group(1).strip(' "')
-        if title.casefold() in {'pause','next','previous','shuffle','back','queue'}: continue
-        candidates.append((button,title))
+    for row in grids[0].children():
+        if row.element_info.control_type!='DataItem' or not row.is_visible(): continue
+        cells=row.descendants(control_type='DataItem')
+        # A song is directly verifiable against the media session's track title.
+        if not any(re.match(r'^Song(?:\s|\u00a0)',c.window_text()) for c in cells): continue
+        links=row.descendants(control_type='Hyperlink')
+        if not links: continue
+        title=links[0].window_text().strip()
+        if not title: continue
+        for button in row.descendants(control_type='Button'):
+            label=button.window_text().strip()
+            if (label=='Play' or label.casefold()==('Play '+title).casefold()) and button.is_visible() and button.is_enabled():
+                candidates.append((button,title));break
     return candidates
+
 
 def execute(query):
     global STAGE
@@ -73,10 +99,7 @@ def execute(query):
     STAGE='verifying search field'
     search_verified=False
     while time.monotonic()<deadline:
-        for edit in window.descendants(control_type='Edit'):
-            try: value=edit.get_value()
-            except Exception: continue
-            if value.strip().casefold()==query.casefold(): search_verified=True;break
+        search_verified=search_matches(window,query)
         if search_verified: break
         time.sleep(.3)
     if not search_verified:
