@@ -53,7 +53,7 @@ Automated recording-boundary and encoding checks:
 
 Close any old recorder window and relaunch `main.py`. Record a command, then click Transcribe. That button uploads only the selected recording to Groq for transcription. Recording, playback and voice-calibration tools remain local. Nothing is sent automatically after recording.
 
-Set `GROQ_API_KEY` in your local `.env` file; `.env.example` shows the required variable without including a secret. The app uses Groq's multilingual `whisper-large-v3-turbo` transcription endpoint with automatic language detection. See [Groq speech-to-text documentation](https://console.groq.com/docs/speech-to-text).
+Set `GROQ_API_KEY` in your local `.env` file; `.env.example` shows the required variable without including a secret. The app uses Groq's multilingual `whisper-large-v3-turbo` transcription endpoint with automatic language detection and a short app-name vocabulary hint, including Chrome and Spotify. The hint guides spelling; transcript text is not altered with blanket word replacements. See [Groq speech-to-text documentation](https://console.groq.com/docs/speech-to-text).
 
 The transcript appears in the window and is saved beside its WAV under the ignored `recordings/` folder. Missing keys, rejected credentials, connection errors, timeouts and usage limits produce a retryable message. No spoken command is executed yet.
 

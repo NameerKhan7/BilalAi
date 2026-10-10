@@ -6,6 +6,7 @@ from dotenv import dotenv_values
 from groq import Groq,AuthenticationError,RateLimitError,APITimeoutError,APIConnectionError,APIStatusError
 ROOT=Path(__file__).resolve().parent
 DEFAULT_MODEL='whisper-large-v3-turbo'
+VOCABULARY_HINT='Windows voice assistant vocabulary: Chrome, Google Chrome, Chrome browser, Spotify, YouTube, Instagram, WhatsApp, Notepad, Calculator, Bilal.'
 
 class TranscriptionError(RuntimeError):
     """A safe, user-facing transcription error without credential details."""
@@ -28,7 +29,7 @@ def transcribe_recording(path,api_key=None,language=None):
     key=api_key or os.environ.get('GROQ_API_KEY') or dotenv_values(ROOT/'.env').get('GROQ_API_KEY')
     if not key or not key.strip():
         raise TranscriptionError('Add GROQ_API_KEY to your local .env file, then try again.')
-    options={'file':(path.name,path.read_bytes()),'model':DEFAULT_MODEL,'response_format':'json','temperature':0.0}
+    options={'file':(path.name,path.read_bytes()),'model':DEFAULT_MODEL,'response_format':'json','temperature':0.0,'prompt':VOCABULARY_HINT}
     if language: options['language']=language
     try:
         with Groq(api_key=key,timeout=20.0,max_retries=1) as client:

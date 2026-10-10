@@ -1,4 +1,4 @@
-﻿import os
+import os
 from pathlib import Path
 from types import SimpleNamespace
 import unittest
@@ -8,7 +8,7 @@ import httpx
 import numpy as np
 from groq import AuthenticationError,APITimeoutError
 from audio_capture import encode_wav
-from stt_client import transcribe_recording,TranscriptionError,DEFAULT_MODEL
+from stt_client import transcribe_recording,TranscriptionError,DEFAULT_MODEL,VOCABULARY_HINT
 ROOT=Path(__file__).resolve().parents[1]
 
 class TranscriptionTests(unittest.TestCase):
@@ -31,8 +31,14 @@ class TranscriptionTests(unittest.TestCase):
             options=client.audio.transcriptions.create.call_args.kwargs
             self.assertEqual(options['file'],(self.path.name,self.path.read_bytes()))
             self.assertEqual(options['model'],DEFAULT_MODEL)
+            self.assertEqual(options['prompt'],VOCABULARY_HINT)
             self.assertNotIn('language',options)
             factory.assert_called_once_with(api_key='test-key',timeout=20.0,max_retries=1)
+
+    def test_legitimate_prom_is_not_replaced_after_transcription(self):
+        with patch('stt_client.Groq') as factory:
+            factory.return_value.__enter__.return_value.audio.transcriptions.create.return_value=SimpleNamespace(text='Find a playlist for prom.')
+            self.assertEqual(transcribe_recording(self.path,api_key='test-key'),'Find a playlist for prom.')
 
     def test_empty_wave_is_not_uploaded(self):
         import wave
