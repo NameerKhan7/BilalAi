@@ -4,11 +4,12 @@ A Python voice assistant for Windows, under active development.
 
 Current features:
 - Push-to-talk command recorder with automatic silence stopping, local WAV saving and playback.
+- Explicit Groq transcription with a transcript display and locally saved text.
 - An experimental local `hey Bilal` wake-word detector and microphone test.
 - Local voice-calibration tools, with a separate personalized candidate profile.
 - CPU training and regression-check utilities.
 
-Wake-word recognition is still experimental. Push-to-talk recording is available as the reliable manual activation path. Transcription, model answers, spoken replies, desktop actions and tray controls are not connected yet.
+Wake-word recognition is still experimental. Push-to-talk recording is available as the reliable manual activation path. Model answers, spoken replies, desktop actions and tray controls are not connected yet.
 
 ## Run the baseline
 
@@ -40,13 +41,23 @@ Or double-click `test_command_recording.bat`. In the recorder window:
 
 Space again or Escape stops recording manually. Nothing spoken is executed yet. The recorder waits up to six seconds for speech and limits a command to fifteen seconds. Recordings stay local in the ignored `recordings/` folder. It briefly measures room noise before showing Speak now, so wait for that prompt before talking.
 
-Repeat with three different sentences. If Windows blocks the microphone, enable microphone access for desktop apps in Windows Settings. The next milestone is speech-to-text after this recording test passes.
+Repeat with three different sentences. If Windows blocks the microphone, enable microphone access for desktop apps in Windows Settings. After recording passes, test speech-to-text below.
 
 Automated recording-boundary and encoding checks:
 
 ```powershell
 .\venv\Scripts\python.exe -m unittest discover -s tests -v
 ```
+
+## Test speech-to-text
+
+Close any old recorder window and relaunch `main.py`. Record a command, then click Transcribe. That button uploads only the selected recording to Groq for transcription. Recording, playback and voice-calibration tools remain local. Nothing is sent automatically after recording.
+
+Set `GROQ_API_KEY` in your local `.env` file; `.env.example` shows the required variable without including a secret. The app uses Groq's multilingual `whisper-large-v3-turbo` transcription endpoint with automatic language detection. See [Groq speech-to-text documentation](https://console.groq.com/docs/speech-to-text).
+
+The transcript appears in the window and is saved beside its WAV under the ignored `recordings/` folder. Missing keys, rejected credentials, connection errors, timeouts and usage limits produce a retryable message. No spoken command is executed yet.
+
+Test three different commands in your usual voice and confirm that the complete meaning is preserved. The service connection was verified with generated speech; no private microphone clip was uploaded during development tests. After your voice passes transcription, the next milestone is connecting model answers.
 
 ## Voice calibration
 

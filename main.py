@@ -1,12 +1,14 @@
-"""BilalAI push-to-talk command recording test. No APIs or transcription."""
+"""BilalAI voice-to-text test: local recording and explicit cloud transcription."""
 from pathlib import Path
 import queue
 import threading
 import uuid
+import time
 import tkinter as tk
 from tkinter import ttk
 import winsound
 from audio_capture import capture_command,save_recording
+from stt_client import transcribe_recording,TranscriptionError
 ROOT=Path(__file__).resolve().parent
 
 class RecorderApp:
@@ -18,15 +20,15 @@ class RecorderApp:
         self.last_path=None
         self.closing=False
         self.space_down=False
-        root.title('BilalAI - Command Recorder')
-        root.geometry('580x440')
-        root.minsize(520,420)
+        root.title('BilalAI - Voice to Text')
+        root.geometry('650x640')
+        root.minsize(620,620)
         root.configure(bg='#111827')
         root.protocol('WM_DELETE_WINDOW',self.close)
         panel=tk.Frame(root,bg='#111827',padx=28,pady=24)
         panel.pack(fill='both',expand=True)
         tk.Label(panel,text='BILALAI',font=('Segoe UI',11,'bold'),fg='#72e4bf',bg='#111827').pack(anchor='w')
-        tk.Label(panel,text='Command recorder',font=('Segoe UI',23,'bold'),fg='#f9fafb',bg='#111827').pack(anchor='w',pady=(4,10))
+        tk.Label(panel,text='Voice to text',font=('Segoe UI',23,'bold'),fg='#f9fafb',bg='#111827').pack(anchor='w',pady=(4,10))
         tk.Label(panel,text='Press Space or click Record. Wait for Speak now.\nRecording stops after one second of silence.',
                  font=('Segoe UI',11),justify='left',fg='#cbd5e1',bg='#111827').pack(anchor='w')
         self.status=tk.StringVar(value='Ready to record')
@@ -42,11 +44,19 @@ class RecorderApp:
                                    bg='#334155',fg='white',activebackground='#475569',activeforeground='white',
                                    relief='flat',padx=18,pady=12,state='disabled',takefocus=False)
         self.play_button.pack(side='left',padx=(12,0))
+        self.transcribe_button=tk.Button(row,text='Transcribe',command=self.transcribe,font=('Segoe UI',12,'bold'),
+                                         bg='#3b82f6',fg='white',activebackground='#60a5fa',activeforeground='white',
+                                         relief='flat',padx=18,pady=12,state='disabled',takefocus=False)
+        self.transcribe_button.pack(side='left',padx=(12,0))
         self.detail=tk.StringVar(value='Say: Open YouTube and search for Pakistani food.')
         tk.Label(panel,textvariable=self.detail,font=('Segoe UI',10),fg='#cbd5e1',bg='#111827',justify='left',wraplength=510).pack(anchor='w',pady=(18,0))
-        tk.Label(panel,text='Saved locally. Nothing is uploaded. Escape stops recording or playback.',
+        tk.Label(panel,text='Transcript',font=('Segoe UI',12,'bold'),fg='#f9fafb',bg='#111827').pack(anchor='w',pady=(18,6))
+        self.transcript_box=tk.Text(panel,height=5,width=1,font=('Segoe UI',11),wrap='word',bg='#1f2937',fg='#f9fafb',
+                                    insertbackground='white',relief='flat',padx=10,pady=10,state='disabled')
+        self.transcript_box.pack(fill='both',expand=True)
+        tk.Label(panel,text='Recording and playback stay local. Transcribe sends the selected clip to Groq.\nEscape stops recording or playback.',
                  font=('Segoe UI',9),fg='#94a3b8',bg='#111827',wraplength=510,justify='left').pack(anchor='w',pady=(14,0))
-        for widget in (root,self.record_button,self.play_button):
+        for widget in (root,self.record_button,self.play_button,self.transcribe_button,self.transcript_box):
             widget.bind('<KeyPress-space>',self.press_space)
             widget.bind('<KeyRelease-space>',self.release_space)
             widget.bind('<Escape>',self.escape)
@@ -83,6 +93,8 @@ class RecorderApp:
         self.status.set('Checking microphone - please wait...')
         self.record_button.config(text='Stop recording')
         self.play_button.config(state='disabled')
+        self.transcribe_button.config(state='disabled')
+        self.set_transcript('')
         self.level['value']=0
         threading.Thread(target=self.record_worker,daemon=True).start()
 
@@ -102,6 +114,7 @@ class RecorderApp:
         self.status.set('Playing your recording...')
         self.record_button.config(state='disabled')
         self.play_button.config(state='disabled')
+        self.transcribe_button.config(state='disabled')
         threading.Thread(target=self.play_worker,daemon=True).start()
 
     def play_worker(self):
@@ -111,10 +124,44 @@ class RecorderApp:
         except Exception as exc:
             self.events.put(('error','Playback failed: '+str(exc)))
 
+    def set_transcript(self,text):
+        self.transcript_box.config(state='normal')
+        self.transcript_box.delete('1.0','end')
+        self.transcript_box.insert('1.0',text)
+        self.transcript_box.config(state='disabled')
+
+    def transcribe(self):
+        if self.state!='idle' or self.last_path is None: return
+        self.state='transcribing'
+        self.status.set('Transcribing with Groq...')
+        self.detail.set('Sending this recording to Groq for speech-to-text.')
+        self.record_button.config(state='disabled')
+        self.play_button.config(state='disabled')
+        self.transcribe_button.config(state='disabled')
+        self.level.config(mode='indeterminate')
+        self.level.start(50)
+        threading.Thread(target=self.transcribe_worker,args=(self.last_path,),daemon=True).start()
+
+    def transcribe_worker(self,path):
+        start=time.perf_counter()
+        try:
+            text=transcribe_recording(path)
+            transcript_path=path.with_suffix('.txt')
+            if not self.closing:
+                transcript_path.write_text(text+'\n',encoding='utf-8')
+                self.events.put(('transcribed',(text,time.perf_counter()-start,transcript_path.name)))
+        except TranscriptionError as exc:
+            self.events.put(('transcription_error',str(exc)))
+        except Exception:
+            self.events.put(('transcription_error','Could not complete transcription. Please try again.'))
+
     def set_idle(self):
         self.state='idle'
         self.record_button.config(text='Record command',state='normal')
         self.play_button.config(state='normal' if self.last_path else 'disabled')
+        self.transcribe_button.config(state='normal' if self.last_path else 'disabled')
+        self.level.stop()
+        self.level.config(mode='determinate')
         self.level['value']=0
 
     def poll_events(self):
@@ -135,7 +182,8 @@ class RecorderApp:
                     if path:
                         self.last_path=path
                         self.play_button.config(state='normal')
-                        label='Saved - play it back' if result.reason!='max_length' else 'Reached 15 seconds - play it back'
+                        self.transcribe_button.config(state='normal')
+                        label='Saved - play back or transcribe' if result.reason!='max_length' else 'Reached 15 seconds - play it back'
                         self.status.set(label)
                         self.detail.set(f'{result.duration_seconds:.1f} seconds saved in recordings/{path.name}')
                     else:
@@ -143,6 +191,16 @@ class RecorderApp:
                 elif name=='play_finished':
                     self.set_idle()
                     self.status.set('Ready to record again')
+                elif name=='transcribed':
+                    text,duration,filename=data
+                    self.set_idle()
+                    self.set_transcript(text)
+                    self.status.set('Transcript ready')
+                    self.detail.set(f'Transcribed in {duration:.1f}s. Text saved in recordings/{filename}')
+                elif name=='transcription_error':
+                    self.set_idle()
+                    self.status.set('Transcription failed - retry available')
+                    self.detail.set(data)
                 elif name=='error':
                     self.set_idle()
                     self.status.set('Could not complete the test')
