@@ -109,3 +109,5 @@ The current request takes precedence over completed tasks in conversation histor
 logs/agent_latest.json points to the latest real task trace, including start time, model, previous request, current request, tool steps and outcome. Unit and diagnostic model tests disable runtime trace writing so they do not become the latest user task. These private files remain excluded from Git.
 
 The companion starts hidden while local wake-word monitoring stays active. A wake or manually initiated request reveals it. It stays visible through recording, execution and spoken output, then hides automatically after completion. Pending speech prevents early dismissal; a new request prevents an older dismissal timer from hiding an active task. The tray remains available while the avatar is hidden.
+
+Ctrl+C in the launching terminal requests a clean GUI shutdown. The signal handler does not raise inside animation callbacks; a GUI timer stops animation, speech and pending processing. Painter scopes always release their drawing device, including on exceptions. Quit Bilal from the tray is also supported.

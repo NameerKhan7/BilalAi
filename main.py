@@ -1,5 +1,6 @@
 """Bilal AI: floating native character, wake activation and a model-driven agent."""
-import argparse,json,math,os,sys,time
+import argparse,json,math,os,sys,time,signal,threading
+from contextlib import contextmanager
 from pathlib import Path
 from PySide6.QtCore import Qt,QTimer,QRectF,QPointF,QPropertyAnimation,QEasingCurve,QLockFile
 from PySide6.QtGui import QColor,QPainter,QPixmap,QPen,QRadialGradient,QIcon,QAction,QFontDatabase,QFont
@@ -17,6 +18,15 @@ TITLES={'idle':'Right here with you.','listening':'I’m listening.','processing
 
 def color(key): return QColor(THEME[key])
 
+@contextmanager
+def managed_painter(device):
+    painter=QPainter(device)
+    try:
+        yield painter
+    finally:
+        if painter.isActive():painter.end()
+
+
 class CharacterStage(QWidget):
     def __init__(self):
         super().__init__();self.setFixedHeight(315);self.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents)
@@ -33,13 +43,15 @@ class CharacterStage(QWidget):
     @staticmethod
     def feather_patch(image,source,width,height):
         patch=QPixmap(width,height);patch.fill(Qt.GlobalColor.transparent)
-        painter=QPainter(patch);painter.setRenderHint(QPainter.RenderHint.SmoothPixmapTransform)
-        painter.drawPixmap(QRectF(0,0,width,height),image,source)
-        painter.setCompositionMode(QPainter.CompositionMode.CompositionMode_DestinationIn)
-        painter.scale(1,height/width)
-        mask=QRadialGradient(QPointF(width/2,width/2),width/2)
-        mask.setColorAt(0,QColor(255,255,255,255));mask.setColorAt(.7,QColor(255,255,255,255));mask.setColorAt(1,QColor(255,255,255,0))
-        painter.fillRect(QRectF(0,0,width,width),mask);painter.end();return patch
+        with managed_painter(patch) as painter:
+            painter.setRenderHint(QPainter.RenderHint.SmoothPixmapTransform)
+            painter.drawPixmap(QRectF(0,0,width,height),image,source)
+            painter.setCompositionMode(QPainter.CompositionMode.CompositionMode_DestinationIn)
+            painter.scale(1,height/width)
+            mask=QRadialGradient(QPointF(width/2,width/2),width/2)
+            mask.setColorAt(0,QColor(255,255,255,255));mask.setColorAt(.7,QColor(255,255,255,255));mask.setColorAt(1,QColor(255,255,255,0))
+            painter.fillRect(QRectF(0,0,width,width),mask);
+        return patch
     def set_state(self,state):
         if state!=self.state:
             self.old=self.state;self.state=state;self.changed=time.monotonic();self.update()
@@ -85,38 +97,38 @@ class CharacterStage(QWidget):
             p.setBrush(gradient);p.setPen(Qt.PenStyle.NoPen);p.drawEllipse(QPointF(240,276),65,58)
         p.setOpacity(1)
     def paintEvent(self,event):
-        p=QPainter(self);p.setRenderHint(QPainter.RenderHint.Antialiasing);p.setRenderHint(QPainter.RenderHint.SmoothPixmapTransform)
-        scale=min(self.width()/330,self.height()/315)
-        p.translate(self.width()/2-240*scale,(self.height()-315*scale)/2)
-        p.scale(scale,scale)
-        t=time.monotonic()-self.started;self.energy+=.18*(self.level-self.energy)
-        bob=0  # No vertical floating: character gestures animate around a fixed anchor.
-        radius=109+math.sin(t*2)*5+(self.energy*15 if self.state in {'listening','speaking'} else 0)
-        glow=QRadialGradient(QPointF(240,265),radius)
-        warm=color('accent');warm.setAlpha(85 if self.state!='inactive' else 30)
-        glow.setColorAt(0,warm);glow.setColorAt(1,QColor(255,138,61,0))
-        p.setBrush(glow);p.setPen(Qt.PenStyle.NoPen);p.drawEllipse(QPointF(240,265),radius,radius*.65)
-        mix=min(1,(time.monotonic()-self.changed)/.32)
-        if mix<1:self.draw_pose(p,self.old,1-mix,bob)
-        self.draw_pose(p,self.state,mix,bob)
-        if self.state in {'loading','processing'}:
-            for i in range(3):
-                angle=t*(1.3 if self.state=='loading' else .8)+i*2.094
-                p.setBrush(color('accent'));p.drawEllipse(QPointF(240+98*math.cos(angle),267+22*math.sin(angle)),3,3)
-        p.end()
+        with managed_painter(self) as p:
+            p.setRenderHint(QPainter.RenderHint.Antialiasing);p.setRenderHint(QPainter.RenderHint.SmoothPixmapTransform)
+            scale=min(self.width()/330,self.height()/315)
+            p.translate(self.width()/2-240*scale,(self.height()-315*scale)/2)
+            p.scale(scale,scale)
+            t=time.monotonic()-self.started;self.energy+=.18*(self.level-self.energy)
+            bob=0  # No vertical floating: character gestures animate around a fixed anchor.
+            radius=109+math.sin(t*2)*5+(self.energy*15 if self.state in {'listening','speaking'} else 0)
+            glow=QRadialGradient(QPointF(240,265),radius)
+            warm=color('accent');warm.setAlpha(85 if self.state!='inactive' else 30)
+            glow.setColorAt(0,warm);glow.setColorAt(1,QColor(255,138,61,0))
+            p.setBrush(glow);p.setPen(Qt.PenStyle.NoPen);p.drawEllipse(QPointF(240,265),radius,radius*.65)
+            mix=min(1,(time.monotonic()-self.changed)/.32)
+            if mix<1:self.draw_pose(p,self.old,1-mix,bob)
+            self.draw_pose(p,self.state,mix,bob)
+            if self.state in {'loading','processing'}:
+                for i in range(3):
+                    angle=t*(1.3 if self.state=='loading' else .8)+i*2.094
+                    p.setBrush(color('accent'));p.drawEllipse(QPointF(240+98*math.cos(angle),267+22*math.sin(angle)),3,3)
 
 class VoiceWave(QWidget):
     def __init__(self,character):
         super().__init__();self.character=character;self.setFixedHeight(26)
         timer=QTimer(self);timer.timeout.connect(self.update);timer.start(50);self.timer=timer
     def paintEvent(self,event):
-        p=QPainter(self);p.setRenderHint(QPainter.RenderHint.Antialiasing)
-        level=self.character.energy if self.character.state=='listening' else .08
-        t=time.monotonic();p.setPen(Qt.PenStyle.NoPen);p.setBrush(color('accent'))
-        for i in range(17):
-            h=3+min(21,level*22)*(.25+.75*abs(math.sin(t*3+i*.65)))
-            p.drawRoundedRect(QRectF(self.width()/2+(i-8)*8-2,(26-h)/2,4,h),2,2)
-        p.end()
+        with managed_painter(self) as p:
+            p.setRenderHint(QPainter.RenderHint.Antialiasing)
+            level=self.character.energy if self.character.state=='listening' else .08
+            t=time.monotonic();p.setPen(Qt.PenStyle.NoPen);p.setBrush(color('accent'))
+            for i in range(17):
+                h=3+min(21,level*22)*(.25+.75*abs(math.sin(t*3+i*.65)))
+                p.drawRoundedRect(QRectF(self.width()/2+(i-8)*8-2,(26-h)/2,4,h),2,2)
 
 class AssistantWindow(QWidget):
     def __init__(self,preview=False):
@@ -166,8 +178,9 @@ class AssistantWindow(QWidget):
                 if hasattr(self.speech,'sayingWord'): self.speech.sayingWord.connect(self.spoken_word)
             else:self.voice.setChecked(False);self.voice.setEnabled(False)
             icon=QPixmap(64,64);icon.fill(Qt.GlobalColor.transparent)
-            painter=QPainter(icon);painter.setRenderHint(QPainter.RenderHint.Antialiasing);painter.setPen(Qt.PenStyle.NoPen)
-            painter.setBrush(color('accent'));painter.drawEllipse(8,8,48,48);painter.end()
+            with managed_painter(icon) as painter:
+                painter.setRenderHint(QPainter.RenderHint.Antialiasing);painter.setPen(Qt.PenStyle.NoPen)
+                painter.setBrush(color('accent'));painter.drawEllipse(8,8,48,48)
             self.tray=QSystemTrayIcon(QIcon(icon),self);menu=QMenu()
             show=menu.addAction('Show Bilal');show.triggered.connect(self.show_center)
             listen=menu.addAction('Start / finish recording');listen.triggered.connect(self.record)
@@ -306,10 +319,16 @@ class AssistantWindow(QWidget):
         self.set_visual('idle','A fresh conversation. Ready when you are.')
 
     def quit(self):
+        if getattr(self,'shutting_down',False):return
+        self.shutting_down=True
+        self.character.timer.stop()
+        for wave in self.findChildren(VoiceWave):wave.timer.stop()
+        if hasattr(self,'fade'):self.fade.stop()
         self.controller.close()
         if self.speech:self.speech.stop()
         if self.tray:self.tray.hide()
-        QApplication.quit()
+        # Give cancellation checks time to stop microphone/tool workers.
+        QTimer.singleShot(200,QApplication.quit)
 
 def main():
     parser=argparse.ArgumentParser();parser.add_argument('--preview-all',action='store_true');args=parser.parse_args()
@@ -345,6 +364,22 @@ def main():
         (ROOT/'logs/ui_startup.json').write_text(json.dumps({'visible':window.isVisible(),'size':[window.width(),window.height()],
             'speech_engine':window.speech.engine() if window.speech else None,'wake_enabled':window.wake.isChecked()}),encoding='utf-8')
     QTimer.singleShot(2000,startup_status)
-    app.exec()
+    run_ui(app,window)
 
+def run_ui(app,window):
+    # Never raise KeyboardInterrupt inside a Qt paint callback.
+    # The signal handler marks a request; the GUI timer performs cleanup.
+    shutdown_requested=threading.Event()
+    previous_sigint=signal.getsignal(signal.SIGINT)
+    signal.signal(signal.SIGINT,lambda signum,frame:shutdown_requested.set())
+    shutdown_timer=QTimer()
+    shutdown_timer.setInterval(50)
+    shutdown_timer.timeout.connect(lambda:window.quit() if shutdown_requested.is_set() else None)
+    shutdown_timer.start()
+    try:
+        app.exec()
+    finally:
+        shutdown_timer.stop()
+        signal.signal(signal.SIGINT,previous_sigint)
+        window.controller.close()
 if __name__=='__main__':main()
