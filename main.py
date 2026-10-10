@@ -343,17 +343,21 @@ class AssistantWindow(QWidget):
             text=data['text'] if isinstance(data,dict) else data
             self.verified=isinstance(data,dict) and data.get('verified',False)
             self.reply.setPlainText(text);self.reply.show();self.setToolTip('Reply ready. Right-click to read it.');self.show_center();self.set_visual('success' if self.verified else 'idle','Your reply is ready.')
-            if self.voice.isChecked() and self.speech:
-                self.controller.monitor.pause() if self.controller.monitor else None
-                self.speech_pending=True
-                self.set_visual('speaking','');self.busy(True);self.speech.say(text)
+            self.speak_message(text)
         elif name in {'error','empty'}:
+            self.verified=False
             self.reply.setPlainText(data);self.reply.show();self.setToolTip('A task needs attention. Right-click to read the details.');self.show_center();self.set_visual('error','Your request could not finish. See the details below.');self.character.level=0
+            self.speak_message(data)
         elif name=='cancelled':self.set_visual('idle','Request cancelled. Ready when you are.')
         elif name=='finished':
             if self.input_dialog:self.input_dialog.continue_button.setEnabled(True)
             if not self.speech_pending and (not self.speech or self.speech.state()!=QTextToSpeech.State.Speaking):
                 self.busy(False);self.controller.resume_wake();self.dismiss_when_idle()
+    def speak_message(self,text):
+        if self.voice.isChecked() and self.speech and text:
+            if self.controller.monitor:self.controller.monitor.pause()
+            self.speech_pending=True
+            self.set_visual('speaking','');self.busy(True);self.speech.say(text)
     def spoken_word(self,word,*args):
         self.character.mouth_at=time.monotonic()
         self.character.word_duration=.08+min(.35,len(word)*.025)

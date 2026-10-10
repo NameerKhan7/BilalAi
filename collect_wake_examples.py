@@ -14,6 +14,12 @@ def main():
           config=CaptureConfig(initial_wait_seconds=4,max_seconds=7,silence_seconds=1.5)
           result=capture_command(config,on_event=lambda name,data:print('SPEAK NOW',flush=True) if name=='ready' else None)
           if not result.speech_detected:print('No speech captured; skipped.');continue
+          import sounddevice as sd
+          try:
+              print('Playing your captured clip for review...',flush=True)
+              sd.play(result.audio,result.sample_rate);sd.wait()
+          except Exception:
+              print('Playback unavailable. Only confirm if you know the recording matches the requested label.')
           sample=store.record(result.audio,None,source='manual')
           if input('Confirm the recording matches that requested label? [y/N] ').strip().casefold()=='y':
               store.label(sample,label);print('Saved reviewed example locally.')

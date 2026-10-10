@@ -25,5 +25,25 @@ class WakeExamples:
             path.write_text(json.dumps(row,indent=2),encoding='utf-8')
         return row
     def examples(self):
-        rows=[json.loads(p.read_text(encoding='utf-8')) for p in self.directory.glob('*.json')]
-        return [row for row in rows if row.get('id')]
+        rows=[]
+        for path in self.directory.glob('*.json'):
+            try:row=json.loads(path.read_text(encoding='utf-8'))
+            except (ValueError,OSError):continue
+            if isinstance(row,dict) and row.get('id'):rows.append(row)
+        return rows
+
+    def reviewed(self):
+        valid=[];invalid=[]
+        for row in self.examples():
+            if row.get('label_source')!='explicit_user_feedback':continue
+            sample_id=row.get('id','')
+            if not isinstance(sample_id,str) or len(sample_id)!=32 or any(c not in '0123456789abcdef' for c in sample_id):
+                invalid.append('invalid_sample_id');continue
+            wave=self.directory/(sample_id+'.wav')
+            try:
+                if row.get('label') not in {'positive','negative'} or not wave.is_file() or wave.stat().st_size>20_000_000:
+                    raise ValueError('Invalid clip')
+                if hashlib.sha256(wave.read_bytes()).hexdigest()!=row.get('sha256'):raise ValueError('Changed clip')
+            except (ValueError,OSError):invalid.append(sample_id);continue
+            valid.append(row)
+        return valid,invalid
