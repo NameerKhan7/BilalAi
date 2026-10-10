@@ -8,6 +8,7 @@ from PySide6.QtWidgets import (QApplication,QWidget,QVBoxLayout,QHBoxLayout,QLab
     QPushButton,QPlainTextEdit,QTextBrowser,QCheckBox,QSystemTrayIcon,QMenu,QDialog)
 from PySide6.QtTextToSpeech import QTextToSpeech
 from ui_controller import AssistantController
+from contextual_input import ContextInputDialog
 
 ROOT=Path(__file__).resolve().parent
 THEME=json.loads((ROOT/'brand_theme.json').read_text(encoding='utf-8-sig'))
@@ -132,7 +133,7 @@ class VoiceWave(QWidget):
 
 class AssistantWindow(QWidget):
     def __init__(self,preview=False):
-        super().__init__();self.preview=preview;self.visual='idle';self.verified=False;self.speech_pending=False;self.pending_dialog=None;self.last_wake_sample=None
+        super().__init__();self.preview=preview;self.visual='idle';self.verified=False;self.speech_pending=False;self.pending_dialog=None;self.input_dialog=None;self.last_wake_sample=None
         self.setWindowTitle('Bilal AI');self.setWindowFlags(Qt.WindowType.FramelessWindowHint|Qt.WindowType.Tool|Qt.WindowType.WindowStaysOnTopHint)
         self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground);self.setFixedSize(96,120)
         self.setStyleSheet(f"QWidget {{font-family:'{THEME['font']}';color:{THEME['text']};}}")
@@ -221,6 +222,24 @@ class AssistantWindow(QWidget):
             self.hide_button.clicked.disconnect();self.hide_button.clicked.connect(self.details.hide)
             self.card.show();self.details.resize(430,470)
         self.details.show();self.details.raise_();self.details.activateWindow()
+    def show_context_input(self,request):
+        if self.input_dialog is not None:return
+        def submit(value):
+            if self.speech:self.speech.stop()
+            return self.controller.submit_input(value)
+        dialog=ContextInputDialog(request,THEME,submit,self)
+        dialog.continue_button.setEnabled(self.controller.state=='idle')
+        self.input_dialog=dialog
+        def closed(result):
+            self.input_dialog=None
+            if not dialog.handled and not getattr(self,'shutting_down',False):
+                self.controller.cancel_request();self.controller.resume_wake();self.dismiss_when_idle()
+        dialog.finished.connect(closed)
+        dialog.adjustSize()
+        screen=QApplication.screenAt(self.pos()) or QApplication.primaryScreen();area=screen.availableGeometry()
+        dialog.move(max(area.left(),min(self.x()+self.width()//2-dialog.width()//2,area.right()-dialog.width())),
+                    max(area.top(),area.bottom()-self.height()-dialog.height()-20))
+        dialog.show();dialog.raise_();dialog.activateWindow();dialog.entry.setFocus()
     def label_wake(self,label):
         monitor=self.controller.monitor
         sample=self.last_wake_sample or (monitor.last_sample if monitor else None)
@@ -283,6 +302,10 @@ class AssistantWindow(QWidget):
         elif name=='wake_activated':
             self.last_wake_sample=data.get('sample_id')
             self.show_center();self.reply.hide();self.transcript.hide()
+        elif name=='input_needed':self.show_context_input(data)
+        elif name=='input_cancelled':
+            if self.input_dialog:
+                self.input_dialog.handled=True;self.input_dialog.close();self.input_dialog=None
         elif name=='approval':self.show_approval(data)
         elif name=='approval_cancelled':
             if self.pending_dialog:
@@ -328,6 +351,7 @@ class AssistantWindow(QWidget):
             self.reply.setPlainText(data);self.reply.show();self.setToolTip('A task needs attention. Right-click to read the details.');self.show_center();self.set_visual('error','Your request could not finish. See the details below.');self.character.level=0
         elif name=='cancelled':self.set_visual('idle','Request cancelled. Ready when you are.')
         elif name=='finished':
+            if self.input_dialog:self.input_dialog.continue_button.setEnabled(True)
             if not self.speech_pending and (not self.speech or self.speech.state()!=QTextToSpeech.State.Speaking):
                 self.busy(False);self.controller.resume_wake();self.dismiss_when_idle()
     def spoken_word(self,word,*args):
@@ -345,6 +369,7 @@ class AssistantWindow(QWidget):
         # Check again after the brief completion pose: a new wake must cancel dismissal.
         QTimer.singleShot(220,self.hide_if_idle)
     def hide_if_idle(self):
+        if self.input_dialog is not None and self.input_dialog.isVisible():return
         if self.pending_dialog is not None and self.pending_dialog.isVisible():return
         if self.controller and self.controller.state=='idle' and not self.speech_pending:
             if not self.speech or self.speech.state()!=QTextToSpeech.State.Speaking:
@@ -371,6 +396,7 @@ class AssistantWindow(QWidget):
         else:event.accept()
     def clear_conversation(self):
         if self.controller.state!='idle':return
+        if self.controller.pending_input:self.controller.cancel_request()
         self.controller.brain.clear();self.reply.clear();self.reply.hide();self.transcript.clear();self.transcript.hide()
         self.set_visual('idle','A fresh conversation. Ready when you are.')
 

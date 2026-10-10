@@ -19,7 +19,7 @@ class AssistantController(QObject):
         super().__init__();self.state='idle';self.closed=False
         self.cancel=threading.Event();self.stop_capture=threading.Event();self.state_store=state or LocalState(recover_inflight=enable_wake)
         self.brain=AgentBrain(state=self.state_store);self.business=BusinessWorkflows(self.state_store)
-        self.reviewed_action=None;self.learning_process=None
+        self.reviewed_action=None;self.learning_process=None;self.pending_input=None
         self.cancel_listener=CancelListener(self.cancel_request) if (enable_wake if enable_cancel is None else enable_cancel) else None
         self.processor=RequestProcessor(self.brain,on_progress=lambda text:self.emit('progress',text))
         self.wake_enabled=enable_wake
@@ -27,7 +27,7 @@ class AssistantController(QObject):
         if self.monitor: self.monitor.resume()
     def wake_event(self,name,data):
         if name!='wake':self.emit(name,data);return
-        if self.closed or self.state!='idle':return
+        if self.closed or self.state!='idle' or self.pending_input:return
         self.state='recording';self.cancel=threading.Event();self.stop_capture=threading.Event()
         self.emit('wake_activated',{'sample_id':data.get('sample_id')})
         try:
@@ -52,10 +52,10 @@ class AssistantController(QObject):
         self.wake_enabled=enabled
         if enabled and self.monitor is None: self.monitor=WakeMonitor(self.wake_event)
         if self.monitor:
-            if enabled and self.state=='idle': self.monitor.resume()
+            if enabled and self.state=='idle' and not self.pending_input: self.monitor.resume()
             else: self.monitor.pause()
     def record(self,from_wake=False):
-        if self.state!='idle': return
+        if self.state!='idle' or self.pending_input: return
         self.state='recording';self.cancel=threading.Event();self.stop_capture=threading.Event()
         self.emit('preparing',None)
         threading.Thread(target=self._record,args=(from_wake,),daemon=True).start()
@@ -85,7 +85,7 @@ class AssistantController(QObject):
         self.emit('transcript',text);self._agent(text,path)
     def send(self,text):
         text=text.strip()
-        if self.state!='idle' or not text: return
+        if self.state!='idle' or self.pending_input or not text: return
         self.state='thinking';self.cancel=threading.Event()
         self.emit('transcript',text)
         threading.Thread(target=self._typed,args=(text,),daemon=True).start()
@@ -111,6 +111,11 @@ class AssistantController(QObject):
         if self.cancel.is_set(): raise RequestCancelled()
         if path: path.with_suffix('.answer.txt').write_text(f'You: {text}\n\nBilalAI: {result.reply}\n',encoding='utf-8')
         trace=getattr(self.processor,'last_trace',[])
+        detail=next((step['result'].get('input_request') for step in trace if step['result'].get('input_request')),None)
+        if detail:
+            self.pending_input=dict(detail)
+            self.emit('reply',{'text':detail['question'],'verified':False})
+            self.emit('input_needed',self.pending_input);return
         verified=bool(trace) and all(step['result'].get('ok') is True for step in trace) and any(step['result'].get('verified') is True for step in trace)
         self.emit('reply',{'text':result.reply,'verified':verified})
         for step in trace:
@@ -118,8 +123,15 @@ class AssistantController(QObject):
             if action_id:
                 pending=self.state_store.get(action_id)
                 if pending['status']=='pending':self.emit('approval',pending);break
+    def submit_input(self,value):
+        if self.closed or self.state!='idle' or not self.pending_input:return False
+        from contextual_input import validate_detail
+        value=validate_detail(self.pending_input['field'],value)
+        question=self.pending_input['question'];self.pending_input=None
+        self.send('Answer to your clarification '+repr(question)+': '+value+'\nContinue the pending task using its already supplied content. This answer is not sending approval.')
+        return True
     def collect_wake_examples(self):
-        if self.state!='idle':return
+        if self.state!='idle' or self.pending_input:return
         self.state='learning';self.cancel=threading.Event()
         self.emit('thinking',None)
         def work():
@@ -137,6 +149,9 @@ class AssistantController(QObject):
     def finish_recording(self): self.stop_capture.set()
     def cancel_request(self,reject_approval=True):
         self.cancel.set();self.stop_capture.set();self.emit('cancelling',None)
+        if self.pending_input:
+            self.pending_input=None;self.emit('input_cancelled',None)
+            self.brain.remember('Cancel the pending task.','Cancelled; do not continue it.')
         if self.learning_process is not None and self.learning_process.poll() is None:self.learning_process.kill()
         if reject_approval and self.reviewed_action:
             try:self.business.resolve(*self.reviewed_action,approve=False)
@@ -158,7 +173,7 @@ class AssistantController(QObject):
                 self.state='idle';self.emit('finished',None)
         threading.Thread(target=work,daemon=True).start()
     def resume_wake(self):
-        if not self.closed and self.monitor and self.wake_enabled and self.state=='idle': self.monitor.resume()
+        if not self.closed and self.monitor and self.wake_enabled and self.state=='idle' and not self.pending_input: self.monitor.resume()
     def close(self):
         self.closed=True;self.cancel_request(reject_approval=False)
         if self.cancel_listener:self.cancel_listener.stop()

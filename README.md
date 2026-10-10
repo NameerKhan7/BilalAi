@@ -138,3 +138,7 @@ Startup runs after this Windows user signs in, not before login. The project dir
 ## Six-area MVP work
 
 See [the baseline](docs/MVP_BASELINE.md) and [implementation/acceptance status](docs/MVP_IMPLEMENTATION.md). The software paths are implemented and tested, but live account workflows and fresh physical wake acceptance are still pending. Do not describe the MVP as fully validated.
+
+## Contextual input
+
+When a task needs a missing detail, the agent calls request_input. A small temporary box asks for it, including a complete recipient address for email. Enter or Continue submits the detail and closes the box; Cancel or Escape abandons the pending task. The original dictated subject/body remain in conversation context. The box is absent during ordinary tasks, and wake recording pauses while it awaits input. Providing an address is not sending approval: Gmail still requires its separate review step. Credentials should be entered only through account setup, never this popup.

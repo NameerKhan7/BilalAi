@@ -21,6 +21,21 @@ class AgentLoopTests(unittest.TestCase):
     def tearDown(self):
         self.factory.stop();self.values.stop();self.env.stop()
 
+    def test_missing_detail_pauses_before_other_actions_and_preserves_email(self):
+        question='Tell me the recipient email address.'
+        self.executor.execute.return_value={'ok':True,'input_request':{'question':question,'field':'email'}}
+        self.client.models.generate_content.return_value=response(calls=[
+            ('gmail_create_draft',{'to':'invented@example.org','subject':'Meeting','body':'Meet tomorrow.'}),
+            ('request_input',{'question':question,'field':'email'})])
+        reply=self.brain.run('Write an email saying meet tomorrow. Subject: Meeting.',self.executor)
+        self.assertEqual(reply,question)
+        self.executor.execute.assert_called_once_with('request_input',{'question':question,'field':'email'},None)
+        self.assertIn('meet tomorrow',self.brain.history[0]['text'])
+        self.client.models.generate_content.return_value=response('Ready to draft.')
+        self.brain.run('The address is recipient@example.org',self.executor)
+        contents=self.client.models.generate_content.call_args.kwargs['contents']
+        self.assertIn('meet tomorrow',contents[0].parts[0].text)
+
     def test_observe_act_verify_loop(self):
         self.client.models.generate_content.side_effect=[
             response(calls=[('inspect_window',{'window_id':'returned-window'})]),

@@ -9,7 +9,7 @@ Updated 2026-10-11, Asia/Karachi. See MVP_BASELINE.md for the pre-change finding
 | Learning | SQLite preferences/aliases/pronunciation/procedure notes, explicit confirmation, persistence, vocabulary hints and model context | Real Gemini called propose_memory and left it unconfirmed. Persistence and rejection checks pass. Detection clips are unlabelled until user feedback. No silent training/promotion. |
 | Execution | Public webpage reading with continuation/source URLs, arbitrary HTTP(S) Chrome opening, accessible link URLs, current-goal grounding, stale-ID invalidation, uncertain-write mutation blocking | Live official Python documentation read succeeded. Accessible Windows controls remain required; no general screenshot vision or full browser DOM driver. Universal app compatibility is not claimed. |
 | Business | Gmail plain-text draft/readback/review/send/receipt; recipient/content-bound one-shot approvals; Notion page search/read/private note creation/readback | Fixture tests cover draft changes, duplicate approval, payload tampering, timeout/crash recovery, pagination and note verification. Live Gmail/Notion tests are pending by user choice. No real email or Notion page was sent/created during this work. |
-| Reliability | Startup, silent workers, shutdown/painter cleanup, cancellation, encryption, privacy filtering and failure tests | 83 automated tests pass. Tests are selected behavior checks, not universal reliability evidence. Reboot/sign-in and fresh physical voice acceptance still require field testing. |
+| Reliability | Startup, silent workers, shutdown/painter cleanup, cancellation, encryption, privacy filtering and failure tests | 88 automated tests pass. Tests are selected behavior checks, not universal reliability evidence. Reboot/sign-in and fresh physical voice acceptance still require field testing. |
 
 ## Use the new features
 
@@ -62,3 +62,7 @@ References: [Gmail drafts](https://developers.google.com/workspace/gmail/api/gui
 Private memory, approvals and wake recordings are in data/. Encrypted account credentials are in .secrets/. Runtime traces and replay diagnostics are in logs/. All are excluded from Git. Only explicitly reviewed wake labels are eligible for candidate preparation. Raw private microphone clips were not uploaded during the regression/stress tests.
 
 The agent cannot approve its own action: no approve/send model tool exists, and its desktop worker excludes its parent and Bilal approval windows. The user interface is the approval boundary. Web/Notion content remains untrusted context and cannot grant permission.
+
+## Missing-detail popup
+
+The model-selected request_input tool pauses a task for a typed/pasted detail. A 360-pixel-wide popup validates a single email address, submits once, and closes on submission/cancel. The current request and prior tool progress are retained so follow-up can use the already dictated body. No other mutations in that model response are executed once clarification is requested. Human email sending approval remains separate. A live Gemini test requested the missing address and retained the original email body after submission against a simulated connector; no live account write occurred.

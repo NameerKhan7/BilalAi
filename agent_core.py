@@ -16,6 +16,8 @@ AGENT_PROMPT="""You are BilalAI, Nameer's desktop agent. Understand the user's g
 
 The current request is the authoritative goal. If the user retracts or cancels an instruction within that same request, acknowledge cancellation without executing its earlier action. Distinguish a cancellation from discussing or quoting cancellation words. Previous completed tasks are context, not instructions to continue them. Use history only when the new request clearly refers to it. When an action has an unclear target or meaning, ask one short clarification before changing any app; do not pick an app just because it was used earlier or happens to be open. A vague request about a home screen with no clear app is insufficient to choose a target. If a transcript is incomplete or makes little sense, ask the user to restate it rather than invent missing words. If the user is reporting a mistaken action or quoting an earlier request, troubleshoot that report instead of executing the quoted action.
 
+When a task needs a missing address, person, city, app target or other detail that can be typed/pasted, call request_input with one short question. For email tasks with no complete recipient address, ask for it before creating a draft; preserve the supplied subject/body and continue when the user answers. Never invent a recipient or ask the user to dictate the whole email again. Do not request secrets through this input.
+
 For time-sensitive facts, use live observations. Resolve today/tomorrow using the supplied current local date, explicitly identify the requested date, and establish the relevant location. A current-weather card is not evidence for tomorrow's forecast. Inspect the forecast for the requested day before answering. Ask for the city if it is not established. If you cannot verify the correct date/location, say so rather than present a current-day value as tomorrow.
 
 Use recent conversation to understand clear follow-ups. Match the user's language. Be concise. Never output a pretend tool call in text. Never claim an app/task/music action succeeded without tool evidence. Opening/searching is intermediate, not completion. A tool's verified:false means its requested effect still needs observation. Re-observe after every generic UI action; control IDs become stale. Use a maximum of one UI mutation per model turn. Recover from a failed tool using new observations rather than repeating the same stale action.
@@ -122,6 +124,17 @@ class AgentBrain:
                             raise AgentError('The agent returned no answer or action. Try again.')
                         reply=text.strip();self.remember(query,reply);save_trace(reply)
                         return reply
+                    input_call=next((call for call in calls if call.name=='request_input'),None)
+                    if input_call is not None:
+                        args=dict(input_call.args or {})
+                        result=executor.execute('request_input',args,cancel_event)
+                        trace.append({'tool':'request_input','arguments':args,'result':result})
+                        if result.get('input_request'):
+                            reply=result['input_request']['question']
+                            completed=trace[:-1]
+                            context_reply=reply+('\nTask progress before clarification (do not repeat completed writes): '+json.dumps(completed,ensure_ascii=False)[:10000] if completed else '')
+                            self.remember(query,context_reply);save_trace('awaiting input: '+reply);return reply
+                        calls=[input_call]
                     candidates=getattr(response,'candidates',None)
                     if not candidates or candidates[0].content is None:
                         raise AgentError('The agent returned an incomplete tool request.')
