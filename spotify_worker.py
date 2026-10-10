@@ -97,10 +97,18 @@ def execute(query):
     if window is None:
         raise PlaybackFailure('Spotify did not expose one usable window. Open Spotify, sign in yourself if needed, and retry.')
     STAGE='verifying search field'
-    search_verified=False
+    search_verified=False;search_entered=False
     while time.monotonic()<deadline:
         search_verified=search_matches(window,query)
         if search_verified: break
+        if not search_entered:
+            fields=[f for f in window.descendants(control_type='ComboBox') if f.is_visible()]
+            if len(fields)==1:
+                # The URI can leave a previous query in a running Spotify instance.
+                # Set the freshly observed search combobox, then verify on the next observation.
+                STAGE='entering Spotify search'
+                fields[0].iface_value.SetValue(query)
+                search_entered=True
         time.sleep(.3)
     if not search_verified:
         raise PlaybackFailure('Opened Spotify search, but could not verify the search field. Playback was not attempted. Keep Spotify visible and retry.')

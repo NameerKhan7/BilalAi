@@ -1,116 +1,85 @@
 # BilalAI
 
-A Python voice assistant for Windows, under active development.
+A Windows desktop assistant with a model-driven observe-act-verify agent loop.
 
-Current features:
-- Push-to-talk command recorder with automatic silence stopping, local WAV saving and playback.
-- Explicit Groq transcription with an editable transcript and locally saved text.
-- Gemini answers with short replies, bounded follow-up context and a Clear chat control.
-- An experimental local `hey Bilal` wake-word detector and microphone test.
-- Local voice-calibration tools, with a separate personalized candidate profile.
-- CPU training and regression-check utilities.
+## How it works
 
-Wake-word recognition is still experimental. Push-to-talk recording is available as the reliable manual activation path. Notion, Spotify and Chrome launch commands are connected. Spoken replies and tray controls are not connected yet.
+Voice -> Groq transcription -> Gemini interprets the goal -> local tools -> observations back to Gemini -> another action or a verified outcome.
 
-## Current one-button flow
+Every request goes through the agent. There is no regular-expression command router and no list of accepted sentences. Ordinary questions can be answered without executing tools. For tasks, the model chooses tools and receives their actual results before deciding what to do next.
 
-Close the old window and run main.py. Click Record once, wait for Speak now, and say a question or command. Recording automatically continues into transcription and request handling. Separate Transcribe and Ask buttons are no longer part of the voice workflow. Send typed text remains as an optional fallback.
+The agent can:
+- Discover registered installed apps and launch a returned app ID.
+- Discover open windows and inspect their visible accessibility controls.
+- Enter literal text into observed editable controls and invoke observed buttons, links and menu items.
+- Search and play Spotify songs with Windows playback verification.
+- Open Google, YouTube and Wikipedia searches in Chrome.
+- Use recent conversation for follow-up requests.
 
-Supported local app commands:
-- Hey Bilal, open Notion.
-- Hey Bilal, open Spotify.
-- Open Chrome.
+An installed-app entry does not guarantee that its interface can be operated. Generic desktop interaction depends on Windows accessibility controls. Canvas-only interfaces, missing accessibility information and unsupported control patterns may block a task. Visual reasoning and browser DOM automation are not implemented. Authentication, security/privacy changes, destructive actions, purchases and sending/publishing are blocked in generic controls; they need dedicated confirmation-aware tools.
 
-App commands use local executable paths or Windows Start-app IDs, without calling Gemini. On this machine Notion and Spotify are Windows Store apps; both were launched and their running processes verified during development. Information questions alone go to Gemini. Unknown app names receive an unsupported-command message rather than being silently changed to another app.
+## Run
 
-Basic browser commands also work: Open YouTube; Search YouTube for Pakistani food; Search for weather in Karachi on Google; Open YouTube and search for Pakistani food in Chrome. These open search URLs in installed Chrome; they do not read pages or click results.
-
-Voice recording now automatically uploads the selected clip to Groq for transcription because it is part of the requested one-button workflow. Local commands are then executed locally. Questions send text and recent chat to Gemini. WAV, transcript and response files remain excluded from Git. Escape cancels recording or a pending request; closing the app also stops pending processing stages.
-
-## Spotify search and playback
-
-Spotify playback requests now run through a separate local Windows UI Automation worker. Close the old Bilal window and restart main.py after installing requirements.txt. Try "Open Spotify and play jazz" or "Play Blinding Lights by The Weeknd on Spotify". Spotify must be installed and signed in; Bilal never handles login prompts.
-
-The worker opens Spotify's search URI, verifies the search field, invokes a visible song row's Play control, and checks Spotify's Windows media session against the selected title. It reports success only after that verification. A playlist or album result, advertisements, non-English controls, or Spotify versions that do not expose accessible result controls can cause a clear unverified-playback error. Live playback was verified on the installed Spotify version: the executor searched for Blinding Lights, invoked its song-row Play button, and Windows reported Blinding Lights by The Weeknd actively playing. Search verification handles Spotify's ComboBox control and encoded spaces. Song selection is scoped to the Search results grid.
-
-For a direct diagnostic test:
+From the code directory, using Python 3.11:
 
 ```powershell
-.\venv\Scripts\python.exe .\spotify_worker.py --query "Blinding Lights"
-```
-
-A diagnostic report is saved locally in logs/spotify_latest.json, excluded from Git. It contains the failed stage or verified result, not screenshots or credentials. Escape stops pending automation; audio already playing may continue. No Spotify API key or Premium assumption is used; playback remains subject to your account's normal restrictions.
-
-## Run the baseline
-
-Use Python 3.11 and install the project dependencies in a virtual environment:
-
-```powershell
-python -m venv venv
 .\venv\Scripts\python.exe -m pip install -r requirements.txt
-.\venv\Scripts\python.exe .\wakeword.py --seconds 60
-```
-
-Say `hey Bilal`, then try normal conversation and similar phrases. The baseline uses a 0.80 threshold, two consecutive matching frames, and a 0.6-second repeat cooldown. The terminal displays microphone and processing latency.
-
-The configuration file `config/config.yaml` currently contains JSON-compatible YAML. The shared audio feature models and synthetic baseline classifier are included under `models/`.
-
-## Test command recording
-
-```powershell
 .\venv\Scripts\python.exe .\main.py
 ```
 
-Or double-click `test_command_recording.bat`. In the recorder window:
+Close any old Bilal window first. Set GEMINI_API_KEY and GROQ_API_KEY in the local .env file. Use .env.example as the template; do not commit credentials.
 
-1. Click Record command or press Space.
-2. Wait for Speak now.
-3. Say: Open YouTube and search for Pakistani food.
-4. Stop speaking and wait for automatic stopping after one second of silence.
-5. Click Play recording and verify that the entire sentence is clear, including its first and last words.
+Click Record command, wait for Speak now, speak the task and stop speaking. Recording, transcription and agent handling continue automatically. Send typed text is available for testing without recording. Escape stops pending steps; completed actions are not undone and playback already started may continue.
 
-Space again or Escape stops recording manually. Nothing spoken is executed yet. The recorder waits up to six seconds for speech and limits a command to fifteen seconds. Recordings stay local in the ignored `recordings/` folder. It briefly measures room noise before showing Speak now, so wait for that prompt before talking.
+The interface shows the tool the agent is currently using. Tasks have a 12-round / 180-second reasoning budget, bounded tool timeouts and cancellation checks.
 
-Repeat with three different sentences. If Windows blocks the microphone, enable microphone access for desktop apps in Windows Settings. After recording passes, test speech-to-text below.
+## Examples
 
-Automated recording-boundary and encoding checks:
+- Play blind Lights on Spotify by The Weeknd.
+- Find the Spotify window and tell me what is in its search field. Do not change anything.
+- Open an installed app by its name.
+- Search YouTube for Pakistani food.
+- Explain the difference between a website and a web app.
+
+These are examples, not sentence templates. The model interprets wording and context. For music it can resolve a plausible title from an imperfect transcript and artist; search results and actual playback are the source of truth.
+
+## Verified behavior
+
+The real Gemini agent interpreted "Play blind Lights on Spotify by The Weeknd", called spotify_play with "Blinding Lights The Weeknd", received verified playback and reported the actual song. The corrected Spotify adapter reads the search ComboBox, updates a retained previous query when necessary, and invokes the song-row Play button in the Search results grid.
+
+Installed-app discovery returned 271 entries on the development PC, and actual Spotify control inspection returned visible controls. This establishes working discovery and observation, not universal compatibility with those apps.
+
+Automated tests cover the model tool loop, recovery from failed tools, cancellation, mutation sequencing, schema validation, recording, transcription, media verification and safe failure reporting:
 
 ```powershell
-.\venv\Scripts\python.exe -m unittest discover -s tests -v
+.\venv\Scripts\python.exe -m unittest discover -s tests -q
 ```
 
-## Test speech-to-text
+## Source structure
 
-Close any old recorder window and relaunch `main.py`. Record a command, then click Transcribe. That button uploads only the selected recording to Groq for transcription. Recording, playback and voice-calibration tools remain local. Nothing is sent automatically after recording.
+- agent_core.py: model reasoning, bounded conversation, manual tool-call loop and task traces.
+- agent_tools.py: declared tool schemas, validation and desktop-worker bridge.
+- desktop_worker.py: persistent Windows accessibility session with observed window/control IDs.
+- request_router.py: forwards every request to the agent; no phrase parsing.
+- spotify_worker.py / spotify_tools.py: verified music playback capability.
+- main.py: voice/typed interface and task-progress updates.
+- audio_capture.py / stt_client.py: recording and transcription.
 
-Set `GROQ_API_KEY` in your local `.env` file; `.env.example` shows the required variable without including a secret. The app uses Groq's multilingual `whisper-large-v3-turbo` transcription endpoint with automatic language detection and a short app-name vocabulary hint, including Chrome and Spotify. The hint guides spelling; transcript text is not altered with blanket word replacements. See [Groq speech-to-text documentation](https://console.groq.com/docs/speech-to-text).
+Each generic action invalidates the prior control IDs. The agent must observe again before another action. Generic activation never counts as a verified completed task.
 
-The transcript appears in the window and is saved beside its WAV under the ignored `recordings/` folder. Missing keys, rejected credentials, connection errors, timeouts and usage limits produce a retryable message. No spoken command is executed yet.
+## Data and task logs
 
-Test three different commands in your usual voice and confirm that the complete meaning is preserved. The service connection was verified with generated speech; no private microphone clip was uploaded during development tests. After your voice passes transcription, the next milestone is testing Gemini answers below.
+Speech clips go to Groq for transcription. Text requests, recent conversation and relevant app observations go to Gemini for reasoning. Desktop actions run locally. There is no model-generated shell-command executor.
 
-## Test Gemini answers
+Recordings, transcripts, replies and per-task traces in logs/agent_*.json stay local and are excluded from Git. Traces contain tool arguments, observations, failures and final outcomes, so they may include private app content. logs/spotify_latest.json contains the latest playback diagnostic. API keys and personalized training recordings/models are also excluded.
 
-The local GEMINI_API_KEY was verified with model listing and text generation. The installed google-genai SDK uses gemini-3.5-flash-lite, listed with free-tier access subject to project quota. The code does not reject keys by prefix or enable paid billing. Sources: https://ai.google.dev/gemini-api/docs/api-key and https://ai.google.dev/gemini-api/docs/pricing.
+## Experimental wake word
 
-Close the old window and relaunch main.py. Record, Transcribe, review or edit the text, then click Ask Bilal. You can also type a question directly. Ask Bilal sends text and up to six recent question/answer pairs to Gemini, without sending the WAV to Gemini. Transcribe separately sends the WAV to Groq.
-
-Try a question, then a follow-up: Remember that my test code word is mango; What code word did I mention? Replies appear in the right pane. Clear chat or closing the app resets session context. Replies associated with a recording are saved locally as .answer.txt beside its WAV. Desktop actions, live web lookup and spoken replies are not connected yet.
-
-GEMINI_MODEL optionally overrides the tested model. Missing keys, quota errors, unavailable models and connection failures produce safe retryable messages. Local text-to-speech is the next milestone after this test.
-
-## Voice calibration
+Push-to-talk is the reliable activation path. The local hey Bilal wake-word detector remains experimental:
 
 ```powershell
+.\venv\Scripts\python.exe .\wakeword.py --seconds 60
 .\venv\Scripts\python.exe .\calibrate_wakeword.py --other-samples 3
 ```
 
-Follow the prompts. Short recordings and their analysis stay on the local computer under `training/recordings/`, which is excluded from Git. No audio is uploaded. See `training/VOICE_CALIBRATION.md`.
-
-Personalized model weights, private calibration reports, downloaded training assets, generated audio and `.env` API keys are excluded from this repository. A personalized profile can be used locally when its model and settings are present; it needs fresh real-voice validation before being made the default.
-
-## Training and limitations
-
-The baseline is an experimental personal-use model. Its synthetic tests do not establish reliable always-on performance. Use the documented microphone checks before depending on it. The roadmap and training notes are in `BilalAI_6Week_Roadmap.md` and `training/`.
-
-The code uses openWakeWord audio feature extractors, Piper-generated samples and public background embeddings. Some training datasets carry noncommercial terms. Source links and asset licensing notes are in `training/README.md`; review those before commercial redistribution or deployment.
+The baseline uses threshold 0.80 with two matching frames. Shared feature models and the synthetic baseline are included; personalized models and private calibration recordings remain local. See training/VOICE_CALIBRATION.md for calibration.

@@ -20,7 +20,7 @@ class RecorderApp:
         self.root=root
         self.events=queue.Queue()
         self.brain=AgentBrain()
-        self.processor=RequestProcessor(self.brain)
+        self.processor=RequestProcessor(self.brain,on_progress=lambda text:self.events.put(('agent_progress',text)))
         self.request_cancel=threading.Event()
         self.state='idle'
         self.stop_event=threading.Event()
@@ -78,7 +78,7 @@ class RecorderApp:
         self.clear_button=tk.Button(bottom,text='Clear chat',command=self.clear_chat,font=('Segoe UI',10),
                                     bg='#334155',fg='white',relief='flat',padx=12,pady=6,takefocus=False)
         self.clear_button.pack(side='right')
-        tk.Label(bottom,text='Record automatically sends speech to Groq. Information questions go to Gemini.\nNotion, Spotify and Chrome commands are executed locally. Escape cancels a request.',
+        tk.Label(bottom,text='Speech goes to Groq. Gemini reasons over your request and relevant app controls.\nActions run locally. Private task logs stay on this PC. Escape stops pending steps.',
                  font=('Segoe UI',9),fg='#94a3b8',bg='#111827',wraplength=560,justify='left').pack(side='left',anchor='w')
         for widget in (root,self.record_button,self.play_button,self.transcribe_button,self.ask_button,self.clear_button,self.answer_box):
             widget.bind('<KeyPress-space>',self.press_space)
@@ -205,7 +205,7 @@ class RecorderApp:
         if not auto: self.request_cancel=threading.Event()
         if self.request_cancel.is_set(): return
         self.state='thinking';self.status.set('Handling your request...')
-        self.detail.set('App commands run locally. Information questions are answered by Gemini.')
+        self.detail.set('Bilal is choosing tools, observing the app and checking the result.')
         self.set_text(self.answer_box,'');self.refresh_controls()
         threading.Thread(target=self.ask_worker,args=(query,self.last_path),daemon=True).start()
 
@@ -236,7 +236,9 @@ class RecorderApp:
         try:
             while True:
                 name,data=self.events.get_nowait()
-                if name=='ready' and not self.stop_event.is_set():
+                if name=='agent_progress':
+                    self.detail.set(data)
+                elif name=='ready' and not self.stop_event.is_set():
                     self.state='listening';self.status.set('Speak now');self.refresh_controls()
                 elif name=='level':
                     self.level['value']=min(100,data['rms']*700)

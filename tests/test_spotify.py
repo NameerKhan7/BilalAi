@@ -4,35 +4,9 @@ import unittest
 from unittest.mock import Mock, patch
 from spotify_worker import matches_title, result_buttons, search_matches, execute, PlaybackFailure
 from spotify_tools import play_spotify, SpotifyActionError
-from request_router import RequestProcessor, spotify_command
+from agent_tools import AgentToolExecutor
 
 class SpotifyTests(unittest.TestCase):
-    def test_recognizes_compound_and_playback_requests(self):
-        self.assertEqual(spotify_command('Hey Bilal, open up Spotify and play jazz.'),'jazz')
-        self.assertEqual(spotify_command('Please play Nog 2 on Spotify'),'Nog 2')
-        self.assertIsNone(spotify_command('How do I play jazz on Spotify?'))
-        self.assertIsNone(spotify_command("Don't play jazz on Spotify"))
-        self.assertIsNone(spotify_command('Open Notion and play jazz'))
-
-    def test_artist_can_follow_the_platform(self):
-        player=Mock(return_value='Playing Blinding Lights by The Weeknd on Spotify.')
-        brain=Mock();brain.history=[]
-        processor=RequestProcessor(brain,spotify_player=player)
-        result=processor.handle('Play blind Lights on Spotify by The Weeknd.')
-        player.assert_called_once_with('blind Lights by The Weeknd',cancel_event=None)
-        brain.ask.assert_not_called()
-        self.assertEqual(result.kind,'app')
-
-    def test_platform_placement_preserves_title_and_artist(self):
-        for text in ('Play Blinding Lights by The Weeknd on Spotify',
-                     'Play Blinding Lights on Spotify by The Weeknd',
-                     'Play on Spotify Blinding Lights by The Weeknd',
-                     'Open Spotify and play Blinding Lights by The Weeknd'):
-            with self.subTest(text=text):
-                self.assertEqual(spotify_command(text),'Blinding Lights by The Weeknd')
-        self.assertIsNone(spotify_command('Play on Spotify'))
-        self.assertIsNone(spotify_command('Explain how to play Blinding Lights on Spotify by The Weeknd'))
-
     def test_combobox_and_encoded_spaces_are_verified(self):
         field=Mock();field.is_visible.return_value=True
         field.iface_value.CurrentValue='Blinding+Lights'
@@ -60,12 +34,10 @@ class SpotifyTests(unittest.TestCase):
         self.assertTrue(matches_title('Blinding Lights','Blinding Lights (Remastered)'))
         self.assertFalse(matches_title('','Any song'))
 
-    def test_failure_is_not_remembered_as_a_success(self):
-        brain=Mock();brain.history=[]
+    def test_playback_failure_reaches_the_agent(self):
         player=Mock(side_effect=SpotifyActionError('Could not verify playback'))
-        processor=RequestProcessor(brain,spotify_player=player)
-        with self.assertRaises(SpotifyActionError): processor.handle('Play jazz on Spotify')
-        brain.ask.assert_not_called();brain.remember.assert_not_called()
+        executor=AgentToolExecutor(spotify_player=player,desktop=Mock())
+        with self.assertRaises(SpotifyActionError): executor.execute('spotify_play',{'query':'jazz'})
 
     def test_worker_failure_does_not_become_a_playing_reply(self):
         worker=Mock();worker.poll.return_value=1
