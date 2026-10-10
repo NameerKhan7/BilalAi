@@ -6,7 +6,7 @@ from google import genai
 from google.genai import types,errors
 ROOT=Path(__file__).resolve().parent
 DEFAULT_MODEL='gemini-3.5-flash-lite'
-SYSTEM_PROMPT='''You are BilalAI, Nameer's practical personal Windows assistant. Answer naturally and briefly, usually in one to three sentences. Match the user's language, including natural Urdu-English when appropriate. Use recent conversation for follow-up questions. This build can record speech, transcribe it and answer questions; desktop actions, live web lookup and spoken replies are not connected yet. Never claim that you opened an app, searched the web, played music or fetched live information. Explain that limitation briefly when such an action is requested. Ask a short clarification when a transcript is ambiguous. Do not pretend uncertain app names are confirmed. Return plain conversational text suitable for later speech playback.'''
+SYSTEM_PROMPT='''You are BilalAI, Nameer's practical personal Windows assistant. Answer naturally and briefly, usually in one to three sentences. Match the user's language, including natural Urdu-English when appropriate. Use recent conversation for follow-up questions. This build can record speech, transcribe it and answer questions; local tools separately handle opening supported apps and browser searches; webpage reading and spoken replies are not connected yet. Never claim an action happened unless a local tool result in the conversation confirms it. You give information; local code executes commands. Explain that limitation briefly when such an action is requested. Ask a short clarification when a transcript is ambiguous. Do not pretend uncertain app names are confirmed. Return plain conversational text suitable for later speech playback.'''
 
 class AgentError(RuntimeError):
     """Safe text for the UI; never includes the provider's raw credential errors."""
@@ -51,6 +51,9 @@ class AgentBrain:
         if not isinstance(text,str) or not text.strip():
             raise AgentError('Gemini returned no answer. Try rephrasing the request.')
         text=text.strip()
-        self.history.extend([{'role':'user','text':query},{'role':'model','text':text}])
-        self.history=self.history[-2*self.history_pairs:]
+        self.remember(query,text)
         return text
+
+    def remember(self,query,reply):
+        self.history.extend([{'role':'user','text':query},{'role':'model','text':reply}])
+        self.history=self.history[-2*self.history_pairs:]

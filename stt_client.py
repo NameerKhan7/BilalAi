@@ -6,7 +6,7 @@ from dotenv import dotenv_values
 from groq import Groq,AuthenticationError,RateLimitError,APITimeoutError,APIConnectionError,APIStatusError
 ROOT=Path(__file__).resolve().parent
 DEFAULT_MODEL='whisper-large-v3-turbo'
-VOCABULARY_HINT='Windows voice assistant vocabulary: Chrome, Google Chrome, Chrome browser, Spotify, YouTube, Instagram, WhatsApp, Notepad, Calculator, Bilal.'
+VOCABULARY_HINT='Windows voice assistant vocabulary: Chrome, Google Chrome, Chrome browser, Notion, Spotify, YouTube, Instagram, WhatsApp, Notepad, Calculator, Bilal.'
 
 class TranscriptionError(RuntimeError):
     """A safe, user-facing transcription error without credential details."""

@@ -10,7 +10,22 @@ Current features:
 - Local voice-calibration tools, with a separate personalized candidate profile.
 - CPU training and regression-check utilities.
 
-Wake-word recognition is still experimental. Push-to-talk recording is available as the reliable manual activation path. Spoken replies, desktop actions and tray controls are not connected yet.
+Wake-word recognition is still experimental. Push-to-talk recording is available as the reliable manual activation path. Notion, Spotify and Chrome launch commands are connected. Spoken replies and tray controls are not connected yet.
+
+## Current one-button flow
+
+Close the old window and run main.py. Click Record once, wait for Speak now, and say a question or command. Recording automatically continues into transcription and request handling. Separate Transcribe and Ask buttons are no longer part of the voice workflow. Send typed text remains as an optional fallback.
+
+Supported local app commands:
+- Hey Bilal, open Notion.
+- Hey Bilal, open Spotify.
+- Open Chrome.
+
+App commands use local executable paths or Windows Start-app IDs, without calling Gemini. On this machine Notion and Spotify are Windows Store apps; both were launched and their running processes verified during development. Information questions alone go to Gemini. Unknown app names receive an unsupported-command message rather than being silently changed to another app.
+
+Basic browser commands also work: Open YouTube; Search YouTube for Pakistani food; Search for weather in Karachi on Google; Open YouTube and search for Pakistani food in Chrome. These open search URLs in installed Chrome; they do not read pages or click results.
+
+Voice recording now automatically uploads the selected clip to Groq for transcription because it is part of the requested one-button workflow. Local commands are then executed locally. Questions send text and recent chat to Gemini. WAV, transcript and response files remain excluded from Git. Escape cancels recording or a pending request; closing the app also stops pending processing stages.
 
 ## Run the baseline
 
