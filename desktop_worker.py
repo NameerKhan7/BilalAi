@@ -7,7 +7,7 @@ from spotify_worker import process_name, media_snapshot
 
 BLOCKED_APPS={'cmd.exe','powershell.exe','pwsh.exe','windowsterminal.exe','wt.exe',
               'codex.exe','chatgpt.exe','lockapp.exe','credentialuibroker.exe',
-              'systemsettings.exe','sechealthui.exe','keepass.exe','1password.exe','bitwarden.exe'}
+              'conhost.exe','openconsole.exe','systemsettings.exe','sechealthui.exe','keepass.exe','1password.exe','bitwarden.exe'}
 BLOCKED_CONTROLS=re.compile(r'\b(delete|remove|send|publish|post|submit|buy|purchase|checkout|pay|install|uninstall|sign.?in|log.?in|password|security|privacy|allow|grant|accept)\b',re.I)
 
 class DesktopSession:
@@ -40,6 +40,7 @@ class DesktopSession:
             name=process_name(window.process_id())
             if not name or name in BLOCKED_APPS: continue
             title=window.window_text()
+            if title=='Bilal AI' or window.class_name()=='ConsoleWindowClass': continue
             if re.search(r'password|sign.?in|log.?in|authentication|verification',title,re.I): continue
             token=uuid.uuid4().hex
             self.windows[token]=window

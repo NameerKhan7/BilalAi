@@ -234,3 +234,6 @@ training/baseline_v*/
 training/*.json
 .env.*
 !.env.example
+
+# Generated UI QA renders
+ui_preview/

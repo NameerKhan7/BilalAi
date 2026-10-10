@@ -1,4 +1,4 @@
-﻿import io
+import io
 import threading
 import unittest
 from unittest.mock import patch
@@ -8,7 +8,7 @@ from audio_capture import CaptureConfig,CommandEndpoint,capture_command,encode_w
 
 class CommandCaptureTests(unittest.TestCase):
     def setUp(self):
-        self.config=CaptureConfig()
+        self.config=CaptureConfig(silence_seconds=1.0,initial_wait_seconds=6.0,max_seconds=15.0)
 
     def frame(self,value):
         return np.full(self.config.block_samples,value,dtype=np.int16)
@@ -42,6 +42,19 @@ class CommandCaptureTests(unittest.TestCase):
         self.assertEqual(result.reason,'silence')
         self.assertEqual(np.count_nonzero(result.audio==5000),20*self.config.block_samples)
         self.assertEqual(np.count_nonzero(result.audio==7000),20*self.config.block_samples)
+
+    def test_default_tolerates_a_three_second_thinking_pause(self):
+        config=CaptureConfig()
+        endpoint=CommandEndpoint(config)
+        for value,count in [(6000,30),(0,150),(7000,30)]:
+            for _ in range(count): self.assertIsNone(endpoint.feed(np.full(config.block_samples,value,dtype=np.int16)))
+        for _ in range(200):
+            if endpoint.feed(np.zeros(config.block_samples,dtype=np.int16)): break
+        result=endpoint.finish()
+        self.assertEqual(result.reason,'silence')
+        self.assertEqual(np.count_nonzero(result.audio==7000),30*config.block_samples)
+        self.assertEqual(config.silence_seconds,4.0)
+        self.assertEqual(config.max_seconds,90.0)
 
     def test_silence_does_not_create_a_command(self):
         endpoint=CommandEndpoint(self.config)

@@ -13,5 +13,6 @@ class RequestProcessor:
         from agent_tools import AgentToolExecutor
         executor=(self.executor_factory or AgentToolExecutor)()
         reply=self.brain.run(query,executor,cancel_event=cancel_event,on_progress=self.on_progress)
+        self.last_trace=list(executor.trace)
         kind='agent' if executor.trace else 'answer'
         return RequestResult(reply,kind)

@@ -13,9 +13,9 @@ class CaptureConfig:
     calibration_seconds: float = .30
     pre_roll_seconds: float = .25
     tail_seconds: float = .25
-    silence_seconds: float = 1.0
-    initial_wait_seconds: float = 6.0
-    max_seconds: float = 15.0
+    silence_seconds: float = 4.0
+    initial_wait_seconds: float = 10.0
+    max_seconds: float = 90.0
     min_speech_rms: float = .008
     noise_multiplier: float = 3.0
     onset_frames: int = 3
@@ -121,7 +121,7 @@ def capture_command(config=CaptureConfig(), device=None, stop_event=None, on_eve
             reason=endpoint.feed(np.frombuffer(raw,dtype=np.int16))
             frame_count+=1
             if frame_count%5==0:
-                on_event('level',{'rms':endpoint.rms,'speech_detected':endpoint.start_index is not None})
+                on_event('level',{'rms':endpoint.rms,'speech_detected':endpoint.start_index is not None,'silence_seconds':max(0,(endpoint.total_samples-endpoint.last_speech_end)/config.sample_rate) if endpoint.start_index is not None else 0})
             if reason is not None: return endpoint.finish()
         return endpoint.finish('manual')
 

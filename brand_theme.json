@@ -1,0 +1,13 @@
+{
+  "name": "Bilal AI",
+  "background": "#111113",
+  "surface": "#1D1D20",
+  "text": "#FAF8F4",
+  "muted": "#A8A4A1",
+  "accent": "#FF8A3D",
+  "orb_pink": "#F171A4",
+  "success": "#76D5AD",
+  "error": "#F18484",
+  "font": "Segoe UI Variable",
+  "source": "User-supplied character and orb references; Notion brand guidelines pending access."
+}
