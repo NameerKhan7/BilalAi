@@ -37,11 +37,14 @@ def app_command(text):
 
 def spotify_command(text):
     text=normalize_request(text)
-    match=re.fullmatch(r'(?:open|launch|start|run)\s+(?:up\s+)?(?:the\s+)?spotify(?:\s+(?:app|application))?\s+and\s+(?:search\s+(?:for\s+)?)?play\s+(.+)',text,re.I)
-    if not match:
-        match=re.fullmatch(r'(?:search\s+(?:for\s+)?)?play\s+(.+?)\s+(?:on|in|using)\s+(?:the\s+)?spotify(?:\s+app)?',text,re.I)
+    # The platform can appear before or after the artist, or before the title.
+    text,opened_spotify=re.subn(r'^(?:open|launch|start|run)\s+(?:up\s+)?(?:the\s+)?spotify(?:\s+(?:app|application))?\s+and\s+', '', text, count=1, flags=re.I)
+    match=re.fullmatch(r'(?:search\s+(?:for\s+)?)?play\s+(.+)',text,re.I)
     if not match: return None
-    query=re.sub(r'^some\s+','',match.group(1),flags=re.I).strip()
+    query,platform_count=re.subn(r'\b(?:on|in|using)\s+(?:the\s+)?spotify(?:\s+app)?\b', '', match.group(1), flags=re.I)
+    if platform_count>1 or (not opened_spotify and not platform_count): return None
+    query=re.sub(r'\s+',' ',query).strip(' ,')
+    query=re.sub(r'^some\s+','',query,flags=re.I).strip()
     return query or None
 
 
@@ -84,7 +87,7 @@ class RequestProcessor:
             if browser:
                 check_cancel();result=self.browser.execute(browser)
             elif unresolved_app_request(query) or re.match(r'^(?:open|launch|run|close|delete|remove|send|install|uninstall|play)\b',normalize_request(query),re.I):
-                result=RequestResult('I can open Notion, Spotify and Chrome, or search Google, YouTube and Wikipedia. That other command is not connected yet.','unsupported')
+                result=RequestResult('I can open Notion, Spotify and Chrome, play a song on Spotify, or search Google, YouTube and Wikipedia. That other command is not connected yet.','unsupported')
             else:
                 history=list(self.brain.history)
                 answer=self.brain.ask(query)

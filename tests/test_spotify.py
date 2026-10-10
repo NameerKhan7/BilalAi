@@ -14,6 +14,25 @@ class SpotifyTests(unittest.TestCase):
         self.assertIsNone(spotify_command("Don't play jazz on Spotify"))
         self.assertIsNone(spotify_command('Open Notion and play jazz'))
 
+    def test_artist_can_follow_the_platform(self):
+        player=Mock(return_value='Playing Blinding Lights by The Weeknd on Spotify.')
+        brain=Mock();brain.history=[]
+        processor=RequestProcessor(brain,spotify_player=player)
+        result=processor.handle('Play blind Lights on Spotify by The Weeknd.')
+        player.assert_called_once_with('blind Lights by The Weeknd',cancel_event=None)
+        brain.ask.assert_not_called()
+        self.assertEqual(result.kind,'app')
+
+    def test_platform_placement_preserves_title_and_artist(self):
+        for text in ('Play Blinding Lights by The Weeknd on Spotify',
+                     'Play Blinding Lights on Spotify by The Weeknd',
+                     'Play on Spotify Blinding Lights by The Weeknd',
+                     'Open Spotify and play Blinding Lights by The Weeknd'):
+            with self.subTest(text=text):
+                self.assertEqual(spotify_command(text),'Blinding Lights by The Weeknd')
+        self.assertIsNone(spotify_command('Play on Spotify'))
+        self.assertIsNone(spotify_command('Explain how to play Blinding Lights on Spotify by The Weeknd'))
+
     def test_combobox_and_encoded_spaces_are_verified(self):
         field=Mock();field.is_visible.return_value=True
         field.iface_value.CurrentValue='Blinding+Lights'
