@@ -120,7 +120,7 @@ class VoiceWave(QWidget):
 
 class AssistantWindow(QWidget):
     def __init__(self,preview=False):
-        super().__init__();self.preview=preview;self.visual='idle';self.verified=False
+        super().__init__();self.preview=preview;self.visual='idle';self.verified=False;self.speech_pending=False
         self.setWindowTitle('Bilal AI');self.setWindowFlags(Qt.WindowType.FramelessWindowHint|Qt.WindowType.Tool|Qt.WindowType.WindowStaysOnTopHint)
         self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground);self.setFixedSize(96,120)
         self.setStyleSheet(f"QWidget {{font-family:'{THEME['font']}';color:{THEME['text']};}}")
@@ -229,6 +229,7 @@ class AssistantWindow(QWidget):
         elif name=='wake_error':
             self.wake.setChecked(False);self.subtitle.setText(data)
         elif name=='preparing':
+            self.show_center()
             self.verified=False
             self.set_visual('loading','Getting ready to listen…');self.busy(True)
         elif name=='ready':
@@ -241,6 +242,7 @@ class AssistantWindow(QWidget):
         elif name=='transcript':
             self.transcript.setPlainText(data);self.transcript.show()
         elif name=='thinking':
+            self.show_center()
             self.set_visual('processing','Understanding your request and choosing the next step.');self.busy(True)
         elif name=='progress':
             label=data.replace('Working: ','')
@@ -252,13 +254,14 @@ class AssistantWindow(QWidget):
             self.reply.setPlainText(text);self.reply.show();self.setToolTip('Reply ready. Right-click to read it.');self.show_center();self.set_visual('success' if self.verified else 'idle','Your reply is ready.')
             if self.voice.isChecked() and self.speech:
                 self.controller.monitor.pause() if self.controller.monitor else None
+                self.speech_pending=True
                 self.set_visual('speaking','');self.busy(True);self.speech.say(text)
         elif name in {'error','empty'}:
             self.reply.setPlainText(data);self.reply.show();self.setToolTip('A task needs attention. Right-click to read the details.');self.show_center();self.set_visual('error','Your request could not finish. See the details below.');self.character.level=0
         elif name=='cancelled':self.set_visual('idle','Request cancelled. Ready when you are.')
         elif name=='finished':
-            if not self.speech or self.speech.state()!=QTextToSpeech.State.Speaking:
-                self.busy(False);self.controller.resume_wake()
+            if not self.speech_pending and (not self.speech or self.speech.state()!=QTextToSpeech.State.Speaking):
+                self.busy(False);self.controller.resume_wake();self.dismiss_when_idle()
     def spoken_word(self,word,*args):
         self.character.mouth_at=time.monotonic()
         self.character.word_duration=.08+min(.35,len(word)*.025)
@@ -266,7 +269,17 @@ class AssistantWindow(QWidget):
     def speech_state(self,state):
         if state==QTextToSpeech.State.Speaking:self.set_visual('speaking')
         elif state in {QTextToSpeech.State.Ready,QTextToSpeech.State.Error}:
+            completed_reply=self.speech_pending;self.speech_pending=False
+            self.character.level=0
             self.busy(False);self.set_visual('success' if self.verified else 'idle','Ready whenever you need me.');self.controller.resume_wake()
+            if completed_reply:self.dismiss_when_idle()
+    def dismiss_when_idle(self):
+        # Check again after the brief completion pose: a new wake must cancel dismissal.
+        QTimer.singleShot(220,self.hide_if_idle)
+    def hide_if_idle(self):
+        if self.controller and self.controller.state=='idle' and not self.speech_pending:
+            if not self.speech or self.speech.state()!=QTextToSpeech.State.Speaking:
+                self.hide()
     def keyPressEvent(self,event):
         if event.key()==Qt.Key.Key_Escape:
             if self.controller and (self.controller.state!='idle' or self.visual=='speaking'):self.cancel_task()
@@ -327,7 +340,7 @@ def main():
         window.set_visual('success','Playback verified.');window.character.changed=time.monotonic()-1
         window.show_center();window.setWindowOpacity(1);app.processEvents();window.grab().save(str(output/'result.png'))
         print('Rendered eight UI states and a result preview in ui_preview/.');return
-    window.show_center()
+    window.hide()  # Wake monitoring and the tray remain active while the avatar is hidden.
     def startup_status():
         (ROOT/'logs/ui_startup.json').write_text(json.dumps({'visible':window.isVisible(),'size':[window.width(),window.height()],
             'speech_engine':window.speech.engine() if window.speech else None,'wake_enabled':window.wake.isChecked()}),encoding='utf-8')
