@@ -4,7 +4,7 @@ from pathlib import Path
 from PySide6.QtCore import Qt,QTimer,QRectF,QPointF,QPropertyAnimation,QEasingCurve,QLockFile
 from PySide6.QtGui import QColor,QPainter,QPixmap,QPen,QRadialGradient,QIcon,QAction,QFontDatabase,QFont
 from PySide6.QtWidgets import (QApplication,QWidget,QVBoxLayout,QHBoxLayout,QLabel,QFrame,
-    QPushButton,QPlainTextEdit,QTextBrowser,QCheckBox,QSystemTrayIcon,QMenu)
+    QPushButton,QPlainTextEdit,QTextBrowser,QCheckBox,QSystemTrayIcon,QMenu,QDialog)
 from PySide6.QtTextToSpeech import QTextToSpeech
 from ui_controller import AssistantController
 
@@ -25,28 +25,73 @@ class CharacterStage(QWidget):
         for i,state in enumerate(STATES):
             self.poses[state]=sheet.copy((i%4)*sheet.width()//4,(i//4)*sheet.height()//2,sheet.width()//4,sheet.height()//2)
         self.orb=QPixmap(str(ROOT/'assets/character/orb-idle.png'))
+        closed=self.poses['inactive'];neutral=self.poses['idle']
+        self.eye_patch=self.feather_patch(closed,QRectF(closed.width()*.30,closed.height()*.37,closed.width()*.42,closed.height()*.08),132,26)
+        self.mouth_patch=self.feather_patch(neutral,QRectF(neutral.width()*.38,neutral.height()*.575,neutral.width()*.24,neutral.height()*.10),80,36)
         self.state='idle';self.old='idle';self.changed=time.monotonic();self.started=self.changed
         self.level=0.;self.energy=0.;self.timer=QTimer(self);self.timer.timeout.connect(self.update);self.timer.start(33)
+    @staticmethod
+    def feather_patch(image,source,width,height):
+        patch=QPixmap(width,height);patch.fill(Qt.GlobalColor.transparent)
+        painter=QPainter(patch);painter.setRenderHint(QPainter.RenderHint.SmoothPixmapTransform)
+        painter.drawPixmap(QRectF(0,0,width,height),image,source)
+        painter.setCompositionMode(QPainter.CompositionMode.CompositionMode_DestinationIn)
+        painter.scale(1,height/width)
+        mask=QRadialGradient(QPointF(width/2,width/2),width/2)
+        mask.setColorAt(0,QColor(255,255,255,255));mask.setColorAt(.7,QColor(255,255,255,255));mask.setColorAt(1,QColor(255,255,255,0))
+        painter.fillRect(QRectF(0,0,width,width),mask);painter.end();return patch
     def set_state(self,state):
         if state!=self.state:
             self.old=self.state;self.state=state;self.changed=time.monotonic();self.update()
     def draw_pose(self,p,state,opacity,bob):
         p.setOpacity(opacity)
+        t=time.monotonic()-self.started;age=time.monotonic()-self.changed
         if state=='idle' and not self.orb.isNull():
-            p.drawPixmap(QRectF(67,0+bob,346,411),self.orb,QRectF(self.orb.rect()))
+            image=self.orb;target=QRectF(67,0,346,411);split=.47
         else:
-            p.drawPixmap(QRectF(95,6+bob,290,303),self.poses[state],QRectF(self.poses[state].rect()))
-            gradient=QRadialGradient(QPointF(240,276+bob),65)
+            image=self.poses[state];target=QRectF(95,6,290,303);split=.74
+        source_height=image.height()*split
+        head_height=target.height()*split
+        # Upper body/face is articulated separately from the stationary torso.
+        p.drawPixmap(QRectF(target.x(),target.y()+head_height,target.width(),target.height()-head_height),
+                     image,QRectF(0,source_height,image.width(),image.height()-source_height))
+        angles={'idle':math.sin(t*.8)*1.1,'listening':-4+math.sin(t*1.7),
+                'processing':math.sin(t*1.3)*2.5,'speaking':math.sin(t*3.8)*1.8,
+                'success':math.sin(age*9)*4*math.exp(-age*2),
+                'error':math.sin(age*12)*4*math.exp(-age*1.5),'loading':0,'inactive':0}
+        p.save();p.translate(240,target.y()+head_height);p.rotate(angles[state]);p.translate(-240,-target.y()-head_height)
+        p.drawPixmap(QRectF(target.x(),target.y(),target.width(),head_height),image,QRectF(0,0,image.width(),source_height))
+        # Reuse the supplied closed-eye artwork for a brief natural blink.
+        blink=(t%5.2)-4.65
+        if state!='inactive' and 0<blink<.26:
+            closed=self.poses['inactive'];amount=math.sin(blink/.26*math.pi)
+            eye_target=QRectF(174,94,132,25) if state=='idle' else QRectF(182,140,120,24)
+            p.setOpacity(opacity*amount)
+            p.drawPixmap(eye_target,self.eye_patch,QRectF(self.eye_patch.rect()))
+            p.setOpacity(opacity)
+        if state=='speaking':
+            neutral=self.poses['idle']
+            elapsed=time.monotonic()-getattr(self,'mouth_at',0)
+            # Word events drive articulation when available; speaking state provides a fallback.
+            opening=max(0,1-elapsed/getattr(self,'word_duration',.22)) if getattr(self,'mouth_at',0) and elapsed<.6 else .5+.5*math.sin(t*12)
+            p.setOpacity(opacity*(1-opening))
+            p.drawPixmap(QRectF(205,180,70,31),self.mouth_patch,QRectF(self.mouth_patch.rect()))
+            p.setOpacity(opacity)
+        p.restore()
+        if state!='idle':
+            gradient=QRadialGradient(QPointF(240,276),65)
             gradient.setColorAt(0,QColor('#FFC378'));gradient.setColorAt(.52,color('accent'))
             gradient.setColorAt(.85,color('orb_pink'));gradient.setColorAt(1,QColor('#B95E75'))
-            p.setBrush(gradient);p.setPen(Qt.PenStyle.NoPen);p.drawEllipse(QPointF(240,276+bob),65,58)
+            p.setBrush(gradient);p.setPen(Qt.PenStyle.NoPen);p.drawEllipse(QPointF(240,276),65,58)
         p.setOpacity(1)
     def paintEvent(self,event):
         p=QPainter(self);p.setRenderHint(QPainter.RenderHint.Antialiasing);p.setRenderHint(QPainter.RenderHint.SmoothPixmapTransform)
-        p.scale(self.width()/480,self.height()/315)
+        scale=min(self.width()/330,self.height()/315)
+        p.translate(self.width()/2-240*scale,(self.height()-315*scale)/2)
+        p.scale(scale,scale)
         t=time.monotonic()-self.started;self.energy+=.18*(self.level-self.energy)
-        bob=math.sin(t*1.8)*2.4 if self.state!='inactive' else 0
-        radius=109+math.sin(t*2)*5+(self.energy*15 if self.state=='listening' else 0)
+        bob=0  # No vertical floating: character gestures animate around a fixed anchor.
+        radius=109+math.sin(t*2)*5+(self.energy*15 if self.state in {'listening','speaking'} else 0)
         glow=QRadialGradient(QPointF(240,265),radius)
         warm=color('accent');warm.setAlpha(85 if self.state!='inactive' else 30)
         glow.setColorAt(0,warm);glow.setColorAt(1,QColor(255,138,61,0))
@@ -77,12 +122,12 @@ class AssistantWindow(QWidget):
     def __init__(self,preview=False):
         super().__init__();self.preview=preview;self.visual='idle';self.verified=False
         self.setWindowTitle('Bilal AI');self.setWindowFlags(Qt.WindowType.FramelessWindowHint|Qt.WindowType.Tool|Qt.WindowType.WindowStaysOnTopHint)
-        self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground);self.setMinimumWidth(460);self.resize(480,730)
+        self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground);self.setFixedSize(96,120)
         self.setStyleSheet(f"QWidget {{font-family:'{THEME['font']}';color:{THEME['text']};}}")
-        layout=QVBoxLayout(self);layout.setContentsMargins(18,0,18,18);layout.setSpacing(0)
-        self.character=CharacterStage();layout.addWidget(self.character)
+        layout=QVBoxLayout(self);layout.setContentsMargins(0,0,0,0);layout.setSpacing(0)
+        self.character=CharacterStage();self.character.setFixedSize(96,120);layout.addWidget(self.character)
         card=QFrame();card.setObjectName('card');card.setStyleSheet(f"#card {{background:{THEME['background']};border:1px solid #39302B;border-radius:25px;}}")
-        layout.addWidget(card);self.card=card
+        self.card=card;card.hide();self.details=None
         body=QVBoxLayout(card);body.setContentsMargins(24,18,24,20);body.setSpacing(9)
         top=QHBoxLayout();brand=QLabel('B I L A L');brand.setStyleSheet(f"color:{THEME['accent']};font-size:11px;font-weight:700;")
         top.addWidget(brand);top.addStretch()
@@ -118,27 +163,47 @@ class AssistantWindow(QWidget):
             self.cancel.clicked.connect(self.cancel_task);self.wake.toggled.connect(self.toggle_wake)
             if QTextToSpeech.availableEngines():
                 self.speech=QTextToSpeech('sapi' if 'sapi' in QTextToSpeech.availableEngines() else QTextToSpeech.availableEngines()[0],self);self.speech.stateChanged.connect(self.speech_state)
+                if hasattr(self.speech,'sayingWord'): self.speech.sayingWord.connect(self.spoken_word)
             else:self.voice.setChecked(False);self.voice.setEnabled(False)
             icon=QPixmap(64,64);icon.fill(Qt.GlobalColor.transparent)
             painter=QPainter(icon);painter.setRenderHint(QPainter.RenderHint.Antialiasing);painter.setPen(Qt.PenStyle.NoPen)
             painter.setBrush(color('accent'));painter.drawEllipse(8,8,48,48);painter.end()
             self.tray=QSystemTrayIcon(QIcon(icon),self);menu=QMenu()
-            show=menu.addAction('Talk to Bilal');show.triggered.connect(self.show_center)
+            show=menu.addAction('Show Bilal');show.triggered.connect(self.show_center)
+            listen=menu.addAction('Start / finish recording');listen.triggered.connect(self.record)
+            cancel=menu.addAction('Cancel request');cancel.triggered.connect(self.cancel_task)
+            details=menu.addAction('Read reply / type a request');details.triggered.connect(self.show_details)
+            wake_action=menu.addAction('Listen for Hey Bilal');wake_action.setCheckable(True);wake_action.setChecked(True);wake_action.toggled.connect(self.wake.setChecked)
+            self.wake.toggled.connect(wake_action.setChecked)
+            voice_action=menu.addAction('Speak replies');voice_action.setCheckable(True);voice_action.setChecked(self.voice.isChecked());voice_action.toggled.connect(self.voice.setChecked)
+            self.voice.toggled.connect(voice_action.setChecked)
             clear=menu.addAction('Clear conversation');clear.triggered.connect(self.clear_conversation)
             quit_action=menu.addAction('Quit Bilal');quit_action.triggered.connect(self.quit)
             self.tray.setContextMenu(menu);self.tray.setToolTip('Bilal AI — your desktop companion')
             self.tray.activated.connect(lambda reason:self.show_center() if reason==QSystemTrayIcon.ActivationReason.Trigger else None)
             self.tray.show()
-        self.drag=None
+        self.drag=None;self.moved=False
+        self.setToolTip('Say Hey Bilal or click to talk. Right-click for controls.')
     def set_visual(self,state,subtitle=None):
         self.visual=state;self.character.set_state(state);self.title.setText(TITLES[state])
         if subtitle:self.subtitle.setText(subtitle)
     def show_center(self):
+        # Keep the familiar entry point, but anchor the companion above the taskbar.
         screen=QApplication.screenAt(self.cursor().pos()) or QApplication.primaryScreen()
-        area=screen.availableGeometry();self.character.setFixedHeight(min(315,max(140,area.height()-560)));self.adjustSize()
-        self.move(area.center().x()-self.width()//2,area.center().y()-self.height()//2)
+        area=screen.availableGeometry()
+        self.move(area.center().x()-self.width()//2,area.bottom()-self.height()-10)
         self.show();self.raise_()
-        self.fade=QPropertyAnimation(self,b'windowOpacity');self.fade.setDuration(240);self.fade.setStartValue(.1);self.fade.setEndValue(1);self.fade.setEasingCurve(QEasingCurve.Type.OutCubic);self.fade.start()
+        self.fade=QPropertyAnimation(self,b'windowOpacity');self.fade.setDuration(180)
+        self.fade.setStartValue(.25);self.fade.setEndValue(1);self.fade.start()
+    def show_details(self):
+        if self.details is None:
+            self.details=QDialog()
+            self.details.setWindowTitle('Bilal conversation')
+            self.details.setStyleSheet(f"background:{THEME['background']};color:{THEME['text']};")
+            layout=QVBoxLayout(self.details);layout.setContentsMargins(0,0,0,0);layout.addWidget(self.card)
+            self.hide_button.clicked.disconnect();self.hide_button.clicked.connect(self.details.hide)
+            self.card.show();self.details.resize(430,470)
+        self.details.show();self.details.raise_();self.details.activateWindow()
     def busy(self,value):
         self.send.setEnabled(not value);self.input.setReadOnly(value);self.cancel.setVisible(value)
         self.mic.setEnabled(not value or self.visual=='listening')
@@ -146,6 +211,7 @@ class AssistantWindow(QWidget):
     def record(self):
         if self.controller.state=='recording':self.controller.finish_recording();self.mic.setEnabled(False)
         elif self.controller.state=='idle':
+            if self.speech:self.speech.stop()
             self.reply.hide();self.transcript.hide();self.controller.record()
     def send_text(self):
         text=self.input.toPlainText().strip()
@@ -163,6 +229,7 @@ class AssistantWindow(QWidget):
         elif name=='wake_error':
             self.wake.setChecked(False);self.subtitle.setText(data)
         elif name=='preparing':
+            self.verified=False
             self.set_visual('loading','Getting ready to listen…');self.busy(True)
         elif name=='ready':
             self.set_visual('listening','Take your time. I’ll wait through short pauses.');self.busy(True);self.mic.setEnabled(True);self.mic.setText('■  Finish recording')
@@ -182,16 +249,20 @@ class AssistantWindow(QWidget):
         elif name=='reply':
             text=data['text'] if isinstance(data,dict) else data
             self.verified=isinstance(data,dict) and data.get('verified',False)
-            self.reply.setPlainText(text);self.reply.show();self.show_center();self.set_visual('success' if self.verified else 'idle','Your reply is ready.')
+            self.reply.setPlainText(text);self.reply.show();self.setToolTip('Reply ready. Right-click to read it.');self.show_center();self.set_visual('success' if self.verified else 'idle','Your reply is ready.')
             if self.voice.isChecked() and self.speech:
                 self.controller.monitor.pause() if self.controller.monitor else None
                 self.set_visual('speaking','');self.busy(True);self.speech.say(text)
         elif name in {'error','empty'}:
-            self.reply.setPlainText(data);self.reply.show();self.show_center();self.set_visual('error','Your request could not finish. See the details below.');self.character.level=0
+            self.reply.setPlainText(data);self.reply.show();self.setToolTip('A task needs attention. Right-click to read the details.');self.show_center();self.set_visual('error','Your request could not finish. See the details below.');self.character.level=0
         elif name=='cancelled':self.set_visual('idle','Request cancelled. Ready when you are.')
         elif name=='finished':
             if not self.speech or self.speech.state()!=QTextToSpeech.State.Speaking:
                 self.busy(False);self.controller.resume_wake()
+    def spoken_word(self,word,*args):
+        self.character.mouth_at=time.monotonic()
+        self.character.word_duration=.08+min(.35,len(word)*.025)
+        self.character.level=.4+min(.3,len(word)*.02)
     def speech_state(self,state):
         if state==QTextToSpeech.State.Speaking:self.set_visual('speaking')
         elif state in {QTextToSpeech.State.Ready,QTextToSpeech.State.Error}:
@@ -203,10 +274,16 @@ class AssistantWindow(QWidget):
         elif event.key()==Qt.Key.Key_Space and self.input is not QApplication.focusWidget() and not event.isAutoRepeat() and self.controller:self.record()
         else:super().keyPressEvent(event)
     def mousePressEvent(self,event):
-        if event.button()==Qt.MouseButton.LeftButton:self.drag=event.globalPosition().toPoint()-self.pos()
+        if event.button()==Qt.MouseButton.RightButton and self.tray:self.tray.contextMenu().exec(event.globalPosition().toPoint())
+        elif event.button()==Qt.MouseButton.LeftButton:self.drag=event.globalPosition().toPoint()-self.pos();self.moved=False
     def mouseMoveEvent(self,event):
-        if self.drag is not None and event.buttons() & Qt.MouseButton.LeftButton:self.move(event.globalPosition().toPoint()-self.drag)
-    def mouseReleaseEvent(self,event):self.drag=None
+        if self.drag is not None and event.buttons() & Qt.MouseButton.LeftButton:
+            position=event.globalPosition().toPoint()-self.drag
+            if (position-self.pos()).manhattanLength()>3:self.moved=True
+            if self.moved:self.move(position)
+    def mouseReleaseEvent(self,event):
+        clicked=self.drag is not None and not self.moved;self.drag=None
+        if clicked and self.controller:self.record()
     def closeEvent(self,event):
         if not self.preview:event.ignore();self.hide()
         else:event.accept()

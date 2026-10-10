@@ -29,7 +29,7 @@ From the code directory, using Python 3.11:
 
 Close any old Bilal window first. Set GEMINI_API_KEY and GROQ_API_KEY in the local .env file. Use .env.example as the template; do not commit credentials.
 
-Say Hey Bilal to show the floating character and start listening, or click Talk to Bilal. Speak after the listening expression appears. The local wake detector remains experimental and can be disabled in the popup. Recording, transcription and agent handling continue automatically. Send typed text is available for testing without recording. Escape stops pending steps; completed actions are not undone and playback already started may continue.
+Say Hey Bilal to activate the floating character and start listening, or click the companion. Speak after the listening expression appears. The local wake detector remains experimental and can be disabled in the popup. Recording, transcription and agent handling continue automatically. Send typed text is available for testing without recording. Escape stops pending steps; completed actions are not undone and playback already started may continue.
 
 The interface shows the tool the agent is currently using. Tasks have a 12-round / 180-second reasoning budget, bounded tool timeouts and cancellation checks.
 
@@ -86,9 +86,9 @@ The baseline uses threshold 0.80 with two matching frames. Shared feature models
 
 ## Character interface and longer commands
 
-The native PySide6 popup uses the supplied Bilal character/orb references, with eight expression states, crossfades, breathing motion and microphone-driven glow. It appears at the center of the active screen, can be dragged, and hides to the system tray. The tray can reopen it or quit the app. Windows SAPI reads replies when Speak replies is enabled; its installed voices determine pronunciation. The speaking pose follows real speech state. Success is shown only when the task trace contains verification without a failed tool.
+The native PySide6 popup uses the supplied Bilal character/orb references, with eight expression states, crossfades, head gestures, blinking, speech articulation and microphone-driven glow. The default UI is a 96 by 120 pixel transparent companion at the bottom center of the active screen, above the taskbar. It shows only the person and orb. Click it to start or finish recording; drag it to reposition. Right-click or use the tray for settings and an optional separate conversation window. The tray can reopen it or quit the app. Windows SAPI reads replies when Speak replies is enabled; its installed voices determine pronunciation. The speaking pose follows real speech state. Success is shown only when the task trace contains verification without a failed tool.
 
-Recording waits 4 seconds of silence after speech, gives 10 seconds to start, and permits up to 90 seconds per command. Internal pauses are kept in the saved audio. Click Finish recording to end a command sooner, or Cancel/Escape to discard pending processing. Pauses longer than 4 seconds still finish a command automatically; this is not semantic end-of-speech prediction.
+Recording waits 4 seconds of silence after speech, gives 10 seconds to start, and permits up to 90 seconds per command. Internal pauses are kept in the saved audio. Click the companion again while listening to end a command sooner, or Cancel/Escape to discard pending processing. Pauses longer than 4 seconds still finish a command automatically; this is not semantic end-of-speech prediction.
 
 The idle state uses the orb portrait; the other poses come from the supplied eight-expression reference. Real-time motion is animated in Qt, not a video or a 3D character rig. Colors and typography are configurable in brand_theme.json. Its current values follow the attached references; Notion brand guidelines are pending completion of the user's Notion connection.
 
@@ -99,3 +99,5 @@ Render all states without microphone or API usage:
 ```
 
 Screenshots are saved in the ignored ui_preview/ directory. Character assets and their prompts are documented in assets/character/ASSET_NOTES.md.
+
+The previous large card is hidden by default. Controls, typed requests and full replies are available only on demand through the tray menu. The character stays anchored while its head, eyes and mouth animate; vertical bobbing is disabled. Speech word events animate the mouth where supported, with a speaking-state fallback. This is a 2D animated sprite implementation, not a rigged 3D character.
