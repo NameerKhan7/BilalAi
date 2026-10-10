@@ -216,3 +216,21 @@ __marimo__/
 
 # Streamlit
 .streamlit/secrets.toml
+
+# Wake-word training downloads and generated audio
+training/assets/
+training/cache/
+
+
+# Private local microphone calibration clips
+training/recordings/
+
+
+# Runtime recordings, logs and private personalization artifacts
+recordings/
+logs/
+models/personalized/
+training/baseline_v*/
+training/*.json
+.env.*
+!.env.example

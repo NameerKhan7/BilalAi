@@ -1,0 +1,14 @@
+{
+  "wakeword": {
+    "phrase": "hey Bilal",
+    "model_path": "models/hey_bilal.onnx",
+    "threshold": 0.8,
+    "sample_rate": 16000,
+    "chunk_samples": 1280,
+    "cooldown_seconds": 0.6,
+    "status": "synthetic_baseline",
+    "consecutive_frames": 2,
+    "microphone_latency": "low",
+    "warmup_silence_seconds": 2
+  }
+}

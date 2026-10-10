@@ -1,0 +1,2 @@
+﻿# Additional dependency for the CPU trainer. Runtime uses the project's requirements.txt.
+onnx==1.17.0
