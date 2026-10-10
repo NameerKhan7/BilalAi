@@ -27,6 +27,20 @@ Basic browser commands also work: Open YouTube; Search YouTube for Pakistani foo
 
 Voice recording now automatically uploads the selected clip to Groq for transcription because it is part of the requested one-button workflow. Local commands are then executed locally. Questions send text and recent chat to Gemini. WAV, transcript and response files remain excluded from Git. Escape cancels recording or a pending request; closing the app also stops pending processing stages.
 
+## Spotify search and playback
+
+Spotify playback requests now run through a separate local Windows UI Automation worker. Close the old Bilal window and restart main.py after installing requirements.txt. Try "Open Spotify and play jazz" or "Play Blinding Lights by The Weeknd on Spotify". Spotify must be installed and signed in; Bilal never handles login prompts.
+
+The worker opens Spotify's search URI, verifies the search field, invokes a visible named result's Play control, and checks Spotify's Windows media session against the selected title. It reports success only after that verification. A playlist or album result, advertisements, non-English controls, or Spotify versions that do not expose accessible result controls can cause a clear unverified-playback error. This adapter has automated routing and failure checks; live playback still needs validation against the installed Spotify version.
+
+For a direct diagnostic test:
+
+```powershell
+.\venv\Scripts\python.exe .\spotify_worker.py --query "Blinding Lights"
+```
+
+A diagnostic report is saved locally in logs/spotify_latest.json, excluded from Git. It contains the failed stage or verified result, not screenshots or credentials. Escape stops pending automation; audio already playing may continue. No Spotify API key or Premium assumption is used; playback remains subject to your account's normal restrictions.
+
 ## Run the baseline
 
 Use Python 3.11 and install the project dependencies in a virtual environment:

@@ -12,7 +12,8 @@ class LocalRequestTests(unittest.TestCase):
         self.brain=Mock();self.brain.history=[];self.brain.ask.return_value='A website presents content; a web app supports interactive tasks.'
         self.opener=Mock(return_value='Opened Notion.')
         self.browser=Mock()
-        self.processor=RequestProcessor(self.brain,self.browser,self.opener)
+        self.player=Mock(return_value='Playing jazz on Spotify.')
+        self.processor=RequestProcessor(self.brain,self.browser,self.opener,self.player)
 
     def test_notion_opens_locally_without_gemini(self):
         result=self.processor.handle('Hey Bilal, open the Notion app.')
@@ -21,7 +22,7 @@ class LocalRequestTests(unittest.TestCase):
 
     def test_exact_screenshot_sentence_opens_spotify_without_gemini(self):
         result=self.processor.handle('Okay, so I want you to open up Spotify and play jazz.')
-        self.opener.assert_called_once_with('spotify')
+        self.player.assert_called_once_with('jazz',cancel_event=None)
         self.brain.ask.assert_not_called()
         self.assertEqual(result.kind,'app')
 
@@ -43,10 +44,11 @@ class LocalRequestTests(unittest.TestCase):
     def test_actual_spotify_failure_routes_locally(self):
         self.opener.return_value='Opened Spotify.'
         result=self.processor.handle('I said I want you to open up the Spotify and play Nog 2.')
-        self.opener.assert_called_once_with('spotify')
+        self.player.assert_called_once_with('Nog 2',cancel_event=None)
+        self.opener.assert_not_called()
         self.brain.ask.assert_not_called()
         self.assertEqual(result.kind,'app')
-        self.assertIn('playback are not connected',result.reply)
+        self.assertIn('Playing',result.reply)
 
     def test_polite_wrappers_do_not_send_app_commands_to_gemini(self):
         self.processor.handle('Could you please open up the Notion app?')
@@ -55,9 +57,10 @@ class LocalRequestTests(unittest.TestCase):
 
     def test_playback_request_does_not_get_fake_gemini_tool_reply(self):
         result=self.processor.handle('Play some jazz on the Spotify')
-        self.opener.assert_called_once_with('spotify')
+        self.player.assert_called_once_with('jazz',cancel_event=None)
+        self.opener.assert_not_called()
         self.brain.ask.assert_not_called()
-        self.assertIn('not connected',result.reply)
+        self.assertIn('Playing',result.reply)
 
     def test_spotify_and_chrome_names_are_recognized(self):
         self.assertEqual(app_command('Please open Spotify'),'spotify')

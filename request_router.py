@@ -3,6 +3,7 @@ import re
 from command_types import CommandDecision,RequestResult
 from browser_tools import BrowserTools
 from app_tools import open_app
+from spotify_tools import play_spotify
 
 class RequestCancelled(RuntimeError): pass
 
@@ -34,6 +35,16 @@ def app_command(text):
     return match.group(1).lower() if match else None
 
 
+def spotify_command(text):
+    text=normalize_request(text)
+    match=re.fullmatch(r'(?:open|launch|start|run)\s+(?:up\s+)?(?:the\s+)?spotify(?:\s+(?:app|application))?\s+and\s+(?:search\s+(?:for\s+)?)?play\s+(.+)',text,re.I)
+    if not match:
+        match=re.fullmatch(r'(?:search\s+(?:for\s+)?)?play\s+(.+?)\s+(?:on|in|using)\s+(?:the\s+)?spotify(?:\s+app)?',text,re.I)
+    if not match: return None
+    query=re.sub(r'^some\s+','',match.group(1),flags=re.I).strip()
+    return query or None
+
+
 def browser_command(text):
     text=normalize_request(text)
     match=re.fullmatch(r'(?:open|go to)\s+(google|youtube|wikipedia)(?:\s+in\s+(?:google\s+)?chrome(?:\s+browser)?)?',text,re.I)
@@ -50,21 +61,24 @@ def browser_command(text):
     return None
 
 class RequestProcessor:
-    def __init__(self,brain,browser=None,app_opener=None):
+    def __init__(self,brain,browser=None,app_opener=None,spotify_player=None):
         self.brain=brain;self.browser=browser or BrowserTools();self.app_opener=app_opener or open_app
+        self.spotify_player=spotify_player or play_spotify
 
     def handle(self,query,cancel_event=None):
         def check_cancel():
             if cancel_event is not None and cancel_event.is_set(): raise RequestCancelled('Request cancelled.')
         check_cancel()
+        playback=spotify_command(query)
         app=app_command(query)
-        playback=re.fullmatch(r'play\s+.+\s+on\s+(?:the\s+)?spotify',normalize_request(query),re.I)
-        if playback: app='spotify'
-        if app:
-            reply=self.app_opener(app)
-            if playback or re.search(r'\band\s+play\b',normalize_request(query),re.I):
-                reply+=' Track selection and playback are not connected yet.'
-            result=RequestResult(reply,'app')
+        if playback:
+            check_cancel()
+            result=RequestResult(self.spotify_player(playback,cancel_event=cancel_event),'app')
+        elif app:
+            if re.search(r'\band\s+play\b',normalize_request(query),re.I):
+                result=RequestResult('Playback is connected for Spotify. Specify what to play on Spotify.','unsupported')
+            else:
+                result=RequestResult(self.app_opener(app),'app')
         else:
             browser=browser_command(query)
             if browser:
