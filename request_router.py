@@ -9,12 +9,21 @@ class RequestCancelled(RuntimeError): pass
 
 def normalize_request(text):
     text=text.strip().rstrip('.!?')
-    text=re.sub(r'^(?:hey|hi|hello)\s*,?\s*bilal\b[\s,:.!-]*','',text,flags=re.I)
-    for _ in range(5):
-        updated=re.sub(r"^(?:i said(?: that)?|i want you to|i need you to|i would like you to|i'd like you to|please|can you|could you|would you)\s+",'',text,flags=re.I).strip()
-        if updated==text: break
-        text=updated
+    for _ in range(12):
+        previous=text
+        text=re.sub(r'^(?:hey|hi|hello)\s*,?\s*bilal\b[\s,:.!-]*','',text,flags=re.I)
+        text=re.sub(r'^(?:okay|ok|alright|all right|so|well|actually)[\s,:]+','',text,flags=re.I)
+        text=re.sub(r"^(?:i said(?: that)?|i want you to|i need you to|i would like you to|i'd like you to|i am asking you to|i'm asking you to|please|can you|could you|would you)[\s,:]+",'',text,flags=re.I).strip()
+        if text==previous: break
     return text
+
+
+def unresolved_app_request(text):
+    text=normalize_request(text)
+    # Explanations and negated requests must never become launch actions.
+    if re.search(r"\b(?:how to|how do|how can|don't|do not|never)\b",text,re.I): return False
+    if re.match(r'^(?:what|why|how|when|where|who|which|explain|describe)\b',text,re.I): return False
+    return bool(re.search(r'\b(?:open|launch|run)\s+(?:up\s+)?(?:the\s+)?(?:notion|spotify|chrome|app)\b',text,re.I))
 
 
 def app_command(text):
@@ -60,7 +69,7 @@ class RequestProcessor:
             browser=browser_command(query)
             if browser:
                 check_cancel();result=self.browser.execute(browser)
-            elif re.match(r'^(?:open|launch|run|close|delete|remove|send|install|uninstall|play)\b',normalize_request(query),re.I):
+            elif unresolved_app_request(query) or re.match(r'^(?:open|launch|run|close|delete|remove|send|install|uninstall|play)\b',normalize_request(query),re.I):
                 result=RequestResult('I can open Notion, Spotify and Chrome, or search Google, YouTube and Wikipedia. That other command is not connected yet.','unsupported')
             else:
                 history=list(self.brain.history)

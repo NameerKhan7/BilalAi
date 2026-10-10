@@ -19,6 +19,27 @@ class LocalRequestTests(unittest.TestCase):
         self.opener.assert_called_once_with('notion');self.brain.ask.assert_not_called()
         self.assertEqual(result.kind,'app')
 
+    def test_exact_screenshot_sentence_opens_spotify_without_gemini(self):
+        result=self.processor.handle('Okay, so I want you to open up Spotify and play jazz.')
+        self.opener.assert_called_once_with('spotify')
+        self.brain.ask.assert_not_called()
+        self.assertEqual(result.kind,'app')
+
+    def test_conversational_fillers_can_precede_a_wake_phrase(self):
+        self.processor.handle('Well, okay, hey Bilal, could you please open Notion?')
+        self.opener.assert_called_once_with('notion')
+        self.brain.ask.assert_not_called()
+
+    def test_unmatched_command_does_not_get_fake_gemini_execution(self):
+        result=self.processor.handle('Do me a favor and open Spotify while deleting files')
+        self.assertEqual(result.kind,'unsupported')
+        self.brain.ask.assert_not_called()
+        self.opener.assert_not_called()
+
+    def test_negative_instruction_does_not_launch(self):
+        self.processor.handle("Okay, I don't want you to open Spotify")
+        self.opener.assert_not_called()
+
     def test_actual_spotify_failure_routes_locally(self):
         self.opener.return_value='Opened Spotify.'
         result=self.processor.handle('I said I want you to open up the Spotify and play Nog 2.')
