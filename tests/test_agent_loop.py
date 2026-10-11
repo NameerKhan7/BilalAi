@@ -36,6 +36,13 @@ class AgentLoopTests(unittest.TestCase):
         contents=self.client.models.generate_content.call_args.kwargs['contents']
         self.assertIn('meet tomorrow',contents[0].parts[0].text)
 
+    def test_power_proposal_ends_task_without_further_actions(self):
+        self.executor.execute.return_value={'ok':True,'power_confirmation':True,'approval_id':'fixture','reply':'Confirm restart.'}
+        self.client.models.generate_content.return_value=response(calls=[('request_system_power',{'action':'restart'}),('launch_app',{'app_id':'anything'})])
+        reply=self.brain.run('Restart my laptop.',self.executor)
+        self.assertEqual(reply,'Confirm restart.')
+        self.executor.execute.assert_called_once_with('request_system_power',{'action':'restart'},None)
+
     def test_observe_act_verify_loop(self):
         self.client.models.generate_content.side_effect=[
             response(calls=[('inspect_window',{'window_id':'returned-window'})]),

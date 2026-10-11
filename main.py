@@ -251,19 +251,22 @@ class AssistantWindow(QWidget):
         if pending:self.show_approval(pending[0])
     def show_approval(self,row):
         if self.pending_dialog is not None:return
-        dialog=QDialog(self);dialog.setWindowTitle('Bilal AI Approval');dialog.resize(480,440)
+        dialog=QDialog(self);dialog.setWindowTitle('Bilal AI Approval');dialog.resize(380,230) if row['kind']=='system_power' else dialog.resize(480,440)
         dialog.setStyleSheet(f"background:{THEME['background']};color:{THEME['text']};")
         layout=QVBoxLayout(dialog)
-        heading=QLabel('Review before sending' if row['kind']=='gmail_send' else 'Confirm what Bilal should remember')
+        from power_tools import ACTIONS
+        power_label=ACTIONS.get(row['payload'].get('action'),'Power action') if row['kind']=='system_power' else None
+        heading=QLabel('Confirm '+power_label.lower() if power_label else ('Review before sending' if row['kind']=='gmail_send' else 'Confirm what Bilal should remember'))
         heading.setStyleSheet('font-size:18px;font-weight:600;');layout.addWidget(heading)
         text=QTextBrowser();text.setStyleSheet('border:0;font-size:13px;')
         payload=row['payload']
         if row['kind']=='gmail_send':
             message=payload['message']
             text.setPlainText('From: '+(message.get('from') or 'Connected Gmail account')+'\nTo: '+message['to']+'\nCc: '+message.get('cc','')+'\nBcc: '+message.get('bcc','')+'\nSubject: '+message['subject']+'\n\n'+message['body'])
+        elif row['kind']=='system_power':text.setPlainText(power_label+' this laptop now?\n\nSave your work before confirming. Windows may ask open apps to save. This confirmation expires after two minutes.')
         else:text.setPlainText(payload['key']+'\n\n'+payload['value'])
         layout.addWidget(text);buttons=QHBoxLayout()
-        approve=QPushButton('Approve sending' if row['kind']=='gmail_send' else 'Remember this')
+        approve=QPushButton(power_label+' now' if power_label else ('Approve sending' if row['kind']=='gmail_send' else 'Remember this'))
         reject=QPushButton('Reject')
         approve.setStyleSheet(f'background:{THEME["accent"]};color:#23150B;border-radius:9px;padding:11px;font-weight:600;')
         reject.setStyleSheet('background:#292629;border-radius:9px;padding:11px;')

@@ -76,6 +76,18 @@ class AcceptanceFlowTests(unittest.TestCase):
         self.assertEqual(self.speech.spoken,['Could not finish; please retry.'])
         self.window.hide_if_idle();self.assertTrue(self.window.isVisible())
         self.speech.stop();self.pump(lambda:not self.window.isVisible())
+    def test_power_confirmation_displays_action_and_requires_real_user_click(self):
+        from power_tools import PowerActions
+        backend=Mock();backend.execute.return_value={'ok':True,'verified':False,'reply':'Windows accepted restart.'}
+        self.controller.business=BusinessWorkflows(self.store,power=PowerActions(self.store,backend))
+        result=self.controller.business.power.request('restart')
+        processor=Mock();processor.handle.return_value=Mock(reply=result['reply']);processor.last_trace=[{'result':result}]
+        self.controller.processor=processor;self.controller._typed('Restart my laptop.')
+        backend.execute.assert_not_called();self.assertTrue(self.window.pending_dialog.isVisible())
+        button=next(b for b in self.window.pending_dialog.findChildren(QPushButton) if b.text()=='Restart now')
+        button.click();self.pump(lambda:backend.execute.called and self.controller.state=='idle')
+        backend.execute.assert_called_once_with('restart');self.assertFalse(self.window.verified)
+
     def test_missing_address_to_review_then_approved_fixture_send(self):
         question={'question':'Tell me the email address.','field':'email'}
         processor=Mock()

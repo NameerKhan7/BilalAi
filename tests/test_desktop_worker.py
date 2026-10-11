@@ -35,6 +35,18 @@ class DesktopWorkerTests(unittest.TestCase):
             self.session.activate_control('observed')
         self.control.invoke.assert_not_called()
 
+    def test_power_controls_cannot_bypass_confirmation(self):
+        for label in ['Sleep','Shut down','Restart','Hibernate']:
+            self.control.window_text.return_value=label
+            with self.assertRaisesRegex(ValueError,'dedicated confirmed tool'):
+                self.session.activate_control('observed')
+        self.control.invoke.assert_not_called()
+    def test_power_shortcut_cannot_bypass_confirmation(self):
+        self.session.apps={'power-id':'Restart laptop'}
+        with patch('desktop_worker.subprocess.Popen') as launch:
+            result=self.session.launch_app('power-id')
+        self.assertFalse(result['ok']);launch.assert_not_called()
+
     def test_terminal_and_password_fields_are_blocked(self):
         with patch('desktop_worker.process_name',return_value='powershell.exe'):
             with self.assertRaisesRegex(ValueError,'cannot be automated'):

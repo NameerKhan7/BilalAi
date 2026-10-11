@@ -146,3 +146,11 @@ When a task needs a missing detail, the agent calls request_input. A small tempo
 ## Readiness and physical acceptance
 
 Run `python check_mvp_readiness.py --tests` with the project virtual environment for local readiness checks. The private report is saved to logs/mvp_readiness.json. No account APIs or microphone recording are invoked. See [field acceptance](docs/FIELD_ACCEPTANCE.md) for physical wake/speaker/sign-in checks, reviewed wake collection and the pending Gmail/Notion acceptance sequence. Failures are spoken when Speak replies is enabled.
+
+## Laptop power control
+
+Say ?Hey Bilal, put my laptop to sleep?, ?shut down my laptop?, or ?restart my laptop?. The model proposes request_system_power, then stops for a dedicated confirmation showing the exact action. Clicking Sleep now, Shut down now, or Restart now executes locally; Reject, closing the dialog, or cancellation executes nothing. Confirmations expire after two minutes and cannot be replayed. Save work before confirming. Generic controls and power shortcuts cannot substitute for this approval path.
+
+Shutdown/restart use a fixed local shutdown.exe argument list with /t 0 and no /f, preserving Windows' save-work handling. Sleep uses SetSuspendState with hibernation disabled and wake events retained. Windows permissions, hardware and application blockers can prevent an action; accepted requests do not count as verified shutdown/restart. While asleep, Bilal cannot hear Hey Bilal; wake the laptop through normal hardware controls first.
+
+Power tests use simulated Windows effects; no live power transition was performed during development. References: [Windows shutdown command](https://learn.microsoft.com/en-us/windows-server/administration/windows-commands/shutdown), [Windows sleep API](https://learn.microsoft.com/en-us/windows/win32/api/powrprof/nf-powrprof-setsuspendstate).

@@ -24,7 +24,7 @@ class LocalState:
         if not key.strip() or len(key)>80 or len(value)>2000:raise ValueError('Memory needs a short key and value.')
         with self.db() as db:db.execute('INSERT INTO memories VALUES (?,?,?) ON CONFLICT(key) DO UPDATE SET value=excluded.value,updated=excluded.updated',(key,value,time.time()))
     def propose(self,kind,payload):
-        if kind not in {'memory','gmail_send'}:raise ValueError('Unsupported approval type.')
+        if kind not in {'memory','gmail_send','system_power'}:raise ValueError('Unsupported approval type.')
         action_id=uuid.uuid4().hex;fingerprint=digest(payload)
         with self.db() as db:db.execute('INSERT INTO pending VALUES (?,?,?,?,?,?,NULL)',(action_id,kind,json.dumps(payload),fingerprint,'pending',time.time()))
         return self.get(action_id)

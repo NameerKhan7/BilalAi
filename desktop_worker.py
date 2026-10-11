@@ -8,7 +8,7 @@ from spotify_worker import process_name, media_snapshot
 BLOCKED_APPS={'cmd.exe','powershell.exe','pwsh.exe','windowsterminal.exe','wt.exe',
               'codex.exe','chatgpt.exe','lockapp.exe','credentialuibroker.exe',
               'conhost.exe','openconsole.exe','systemsettings.exe','sechealthui.exe','keepass.exe','1password.exe','bitwarden.exe'}
-BLOCKED_CONTROLS=re.compile(r'\b(delete|remove|send|publish|post|submit|buy|purchase|checkout|pay|install|uninstall|sign.?in|log.?in|password|security|privacy|allow|grant|accept)\b',re.I)
+BLOCKED_CONTROLS=re.compile(r'\b(delete|remove|send|publish|post|submit|buy|purchase|checkout|pay|install|uninstall|sign.?in|log.?in|password|security|privacy|allow|grant|accept|shut.?down|restart|reboot|sleep|hibernate|sign.?out|log.?out)\b',re.I)
 
 class DesktopSession:
     def __init__(self):
@@ -27,7 +27,7 @@ class DesktopSession:
     def launch_app(self,app_id):
         if app_id not in self.apps: return {'ok':False,'error':'Discover installed apps first; this ID was not returned.'}
         label=self.apps[app_id]
-        if re.search(r'password|security|terminal|powershell|command prompt|codex|chatgpt|settings|authenticator',label,re.I):
+        if re.search(r'password|security|terminal|powershell|command prompt|codex|chatgpt|settings|authenticator|\b(shut.?down|restart|reboot|sleep|hibernate)\b',label,re.I):
             return {'ok':False,'error':'This application cannot be automated.'}
         subprocess.Popen([str(Path(os.environ.get('WINDIR','C:/Windows'))/'explorer.exe'),
                           'shell:AppsFolder\\'+app_id],shell=False,stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL)
@@ -84,7 +84,7 @@ class DesktopSession:
         for _ in range(3):
             ancestor=ancestor.parent();names.append(ancestor.window_text())
         if BLOCKED_CONTROLS.search(' '.join(names)):
-            raise ValueError('This control may publish, delete, authorize, purchase, or authenticate. It needs a dedicated confirmed tool.')
+            raise ValueError('This control may change system power, publish, delete, authorize, purchase, or authenticate. It needs a dedicated confirmed tool.')
         if control.element_info.element.CurrentIsPassword: raise ValueError('Password controls cannot be automated.')
         return control
     def activate_control(self,control_id):

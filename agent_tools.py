@@ -18,6 +18,7 @@ def declaration(name, description, properties, required=()):
                                 'required':list(required),'additionalProperties':False})
 S={'type':'string'}
 TOOL_DECLARATIONS=[
+    declaration('request_system_power','Request this laptop to sleep, shut down or restart. Only proposes a fresh human confirmation; it never executes power control. No arbitrary commands or remote targets.',{'action':{'type':'string','enum':['sleep','shutdown','restart']}},['action']),
     declaration('request_input','Pause the task and ask for a missing detail the user needs to type or paste. Use email for a missing recipient address, text for other non-secret details. Never request passwords, tokens or payment details.',{'question':S,'field':{'type':'string','enum':['email','text']}},['question','field']),
     declaration('list_apps','Discover installed apps. Returns registered IDs; use only returned IDs to launch.',{}),
     declaration('launch_app','Launch an installed app by a returned app_id. A launch is not task completion.',{'app_id':S},['app_id']),
@@ -98,6 +99,7 @@ class AgentToolExecutor:
         if name in {'spotify_play','browser_search','open_site','open_url','gmail_create_draft','notion_create_note'} and isinstance(self.desktop,DesktopBridge) and self.desktop.process is not None:
             self.desktop.call('invalidate_observation',{},cancel_event)
         try:
+            if name=='request_system_power':return self.business.power.request(**args)
             if name=='request_input':
                 if not args['question'].strip() or len(args['question'])>500:raise ValueError('Ask one short question.')
                 return {'ok':True,'input_request':args,'reply':args['question']}

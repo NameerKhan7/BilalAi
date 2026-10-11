@@ -122,8 +122,10 @@ class NotionClient:
                 'reply':'Created and verified the Notion note.' if verified else 'Notion created the page, but full content verification did not pass.'}
 
 class BusinessWorkflows:
-    def __init__(self,state=None,gmail=None,notion=None):
+    def __init__(self,state=None,gmail=None,notion=None,power=None):
         self.state=state or LocalState();self.gmail=gmail or GmailClient();self.notion=notion or NotionClient()
+        from power_tools import PowerActions
+        self.power=power or PowerActions(self.state)
     def draft(self,to,subject,body):
         draft=self.gmail.create(to,subject,body)
         approval=self.state.propose('gmail_send',draft)
@@ -138,7 +140,7 @@ class BusinessWorkflows:
     def resolve(self,action_id,fingerprint,approve,cancel_event=None):
         row=self.state.claim(action_id,fingerprint);payload=row['payload']
         if not approve:
-            self.state.finish(action_id,'rejected');return {'ok':True,'reply':'Rejected. Nothing was sent or learned.'}
+            self.state.finish(action_id,'rejected');return {'ok':True,'reply':'Rejected. No action was executed.'}
         sending=False
         try:
             if cancel_event is not None and cancel_event.is_set():
@@ -146,6 +148,10 @@ class BusinessWorkflows:
             if row['kind']=='memory':
                 self.state.remember_confirmed(payload['key'],payload['value'])
                 result={'ok':True,'verified':True,'reply':'Confirmed preference saved locally.'}
+            elif row['kind']=='system_power':
+                self.power.check_fresh(row)
+                sending=True
+                result=self.power.execute_approved(row,cancel_event)
             elif row['kind']=='gmail_send':
                 actual=self.gmail.get(payload['draft_id'])
                 if digest(actual)!=digest(payload['message']):
@@ -161,5 +167,7 @@ class BusinessWorkflows:
         except Exception:
             # A timed-out send may already have reached Gmail. Never retry it automatically.
             self.state.finish(action_id,'uncertain' if sending else 'failed')
+            if row['kind']=='system_power':
+                raise RuntimeError('The power request failed or expired, or its outcome could not be verified. Ask again only after checking the laptop state.') from None
             message='The send outcome could not be verified. Check Gmail Sent before retrying.' if sending else 'The approved action could not be prepared; no email send was attempted. Review the connection and try again.'
             raise RuntimeError(message) from None
