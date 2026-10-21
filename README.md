@@ -1,170 +1,312 @@
-# BilalAI
+<div align="center">
+  <img src="assets/character/orb-idle.png" alt="Bilal holding a glowing orange and pink orb" width="180" />
+  <h1>Bilal AI</h1>
+  <p><strong>A voice agent for your Windows desktop.</strong></p>
+  <p>Ask questions, work across apps, and turn spoken requests into actions.</p>
+  <p>
+    <img alt="Platform: Windows" src="https://img.shields.io/badge/Platform-Windows-FF8A3D?style=flat-square" />
+    <img alt="Python: 3.11" src="https://img.shields.io/badge/Python-3.11-3776AB?style=flat-square" />
+    <img alt="Status: Experimental" src="https://img.shields.io/badge/Status-Experimental-F171A4?style=flat-square" />
+  </p>
+  <p>
+    <a href="#quick-start">Quick start</a> ·
+    <a href="#what-bilal-can-do">Capabilities</a> ·
+    <a href="#how-it-works">Architecture</a> ·
+    <a href="#privacy-and-control">Privacy</a> ·
+    <a href="#development">Development</a>
+  </p>
+</div>
 
-A Windows desktop assistant with a model-driven observe-act-verify agent loop.
+---
 
-## How it works
+Bilal combines voice input, an LLM agent, and tools that operate on your PC. Say **“Hey Bilal”** to bring up a small animated companion, speak your request, and hear the reply. The companion hides when the task and spoken response finish.
 
-Voice -> Groq transcription -> Gemini interprets the goal -> local tools -> observations back to Gemini -> another action or a verified outcome.
+When something is missing, Bilal asks. When an email is ready to send or a power action is requested, it waits for your confirmation.
 
-Ordinary requests go through the agent; explicit cancellation controls are handled locally before execution. There is no regular-expression command router and no list of accepted sentences. Ordinary questions can be answered without executing tools. For tasks, the model chooses tools and receives their actual results before deciding what to do next.
+> **Project status:** Experimental and under active development. Desktop control depends on each app's accessibility support. Gmail and Notion workflows are implemented, but live account acceptance remains pending. Wake detection still needs testing in everyday conditions.
 
-The agent can:
-- Discover registered installed apps and launch a returned app ID.
-- Discover open windows and inspect their visible accessibility controls.
-- Enter literal text into observed editable controls and invoke observed buttons, links and menu items.
-- Search and play Spotify songs with Windows playback verification.
-- Open Google, YouTube and Wikipedia searches in Chrome.
-- Use recent conversation and user-confirmed persistent preferences for follow-up requests.
-- Read public webpage text and source URLs with bounded continuation.
-- Propose memory corrections for confirmation.
-- Prepare Gmail drafts for recipient/content-bound human approval, and operate shared Notion pages once accounts are connected.
+## What Bilal can do
 
-An installed-app entry does not guarantee that its interface can be operated. Generic desktop interaction depends on Windows accessibility controls. Canvas-only interfaces, missing accessibility information and unsupported control patterns may block a task. Visual reasoning and browser DOM automation are not implemented. Authentication, security/privacy changes, destructive actions, purchases and sending/publishing are blocked in generic controls; Gmail now has a dedicated draft-specific approval path; deletion, purchases and generic publishing remain unavailable.
+| Capability | Example request | What to expect |
+| --- | --- | --- |
+| Answer questions | “What's the difference between a website and a web app?” | A conversational answer through Gemini and Windows speech. |
+| Work with desktop apps | “Open Notion.” | Discovers registered apps, launches them, and inspects accessible Windows controls. |
+| Play music | “Play Blinding Lights by The Weeknd on Spotify.” | Searches Spotify and checks the actual playback result. |
+| Search and read the web | “Search YouTube for Pakistani food.” | Opens supported searches in Chrome; reads public webpage text through a separate tool. |
+| Prepare email | “Draft an email saying our meeting is tomorrow at 3 PM.” | Asks for missing details, creates an unsent Gmail draft, and presents it for review. Requires Gmail setup. |
+| Work in Notion | “Find my Bilal AI page.” | Searches and reads shared pages; can create and read back a requested note. Requires Notion setup. |
+| Remember preferences | “Remember that my preferred city is Karachi.” | Proposes a memory and saves it locally after you confirm. |
+| Control laptop power | “Put my laptop to sleep.” | Requests confirmation for sleep, shutdown, or restart before executing locally. |
 
-## Run
+These are examples of natural requests, not a list of required command sentences. Available tools and observable app state determine what the agent can complete.
 
-From the code directory, using Python 3.11:
+### A conversation that keeps moving
+
+You can dictate an email before providing the recipient:
+
+1. **You:** “Draft an email. Subject: Meeting update. Body: Our meeting is tomorrow at 3 PM.”
+2. **Bilal:** Asks for the recipient's address and opens a small input box.
+3. **You:** Paste the address and press **Enter**.
+4. **Bilal:** Continues with the content you already dictated and prepares the draft.
+5. **You:** Review the recipient, subject, and body, then approve or reject sending.
+
+The input box appears when a detail is needed and closes after submission or cancellation. Providing an address does **not** approve sending.
+
+## Quick start
+
+### Requirements
+
+- Windows with Python **3.11**.
+- A microphone and speakers or headphones.
+- Gemini and Groq API keys with available quota.
+- Internet access for reasoning, command transcription, and account services.
+- Spotify or Chrome installed when using their respective tools.
+
+Wake verification and desktop actions run locally. The full assistant requires the hosted services above.
+
+### 1. Clone and install
+
+Run in PowerShell:
 
 ```powershell
+git clone https://github.com/NameerKhan7/BilalAi.git
+cd BilalAi
+py -3.11 -m venv venv
 .\venv\Scripts\python.exe -m pip install -r requirements.txt
-.\venv\Scripts\python.exe .\main.py
 ```
 
-Close any old Bilal window first. Set GEMINI_API_KEY and GROQ_API_KEY in the local .env file. Use .env.example as the template; do not commit credentials.
+### 2. Add your API keys
 
-Say Hey Bilal to activate the floating character and start listening, or click the companion. Speak after the listening expression appears. The local wake detector remains experimental and can be disabled in the popup. Recording, transcription and agent handling continue automatically. Send typed text is available for testing without recording. Escape stops pending steps; completed actions are not undone and playback already started may continue.
-
-The compact character shows listening/processing/speaking states; optional details and approvals are available through the tray. Tasks have a 12-round / 180-second reasoning budget, bounded tool timeouts and cancellation checks.
-
-## Examples
-
-- Play blind Lights on Spotify by The Weeknd.
-- Find the Spotify window and tell me what is in its search field. Do not change anything.
-- Open an installed app by its name.
-- Search YouTube for Pakistani food.
-- Explain the difference between a website and a web app.
-
-These are examples, not sentence templates. The model interprets wording and context. For music it can resolve a plausible title from an imperfect transcript and artist; search results and actual playback are the source of truth.
-
-## Verified behavior
-
-The real Gemini agent interpreted "Play blind Lights on Spotify by The Weeknd", called spotify_play with "Blinding Lights The Weeknd", received verified playback and reported the actual song. The corrected Spotify adapter reads the search ComboBox, updates a retained previous query when necessary, and invokes the song-row Play button in the Search results grid.
-
-Installed-app discovery returned 271 entries on the development PC, and actual Spotify control inspection returned visible controls. This establishes working discovery and observation, not universal compatibility with those apps.
-
-Automated tests cover the model tool loop, recovery from failed tools, cancellation, mutation sequencing, schema validation, recording, transcription, media verification and safe failure reporting:
+Copy the template once, then edit the local file:
 
 ```powershell
-.\venv\Scripts\python.exe -m unittest discover -s tests -q
+Copy-Item .env.example .env
+notepad .env
 ```
 
-## Source structure
-
-- agent_core.py: model reasoning, bounded conversation, manual tool-call loop and task traces.
-- agent_tools.py: declared tool schemas, validation and desktop-worker bridge.
-- desktop_worker.py: persistent Windows accessibility session with observed window/control IDs.
-- request_router.py: forwards every request to the agent; no phrase parsing.
-- spotify_worker.py / spotify_tools.py: verified music playback capability.
-- main.py: voice/typed interface and task-progress updates.
-- audio_capture.py / stt_client.py: recording and transcription.
-
-Each generic action invalidates the prior control IDs. The agent must observe again before another action. Generic activation never counts as a verified completed task.
-
-## Data and task logs
-
-Speech clips go to Groq for transcription. Text requests, recent conversation and relevant app observations go to Gemini for reasoning. Desktop actions run locally. There is no model-generated shell-command executor.
-
-Recordings, transcripts, replies and per-task traces in logs/agent_*.json stay local and are excluded from Git. Traces contain tool arguments, observations, failures and final outcomes, so they may include private app content. logs/spotify_latest.json contains the latest playback diagnostic. API keys and personalized training recordings/models are also excluded.
-
-## Experimental wake word
-
-Push-to-talk is the reliable activation path. The local hey Bilal wake-word detector remains experimental:
-
-```powershell
-.\venv\Scripts\python.exe .\wakeword.py --seconds 60
-.\venv\Scripts\python.exe .\calibrate_wakeword.py --other-samples 3
+```dotenv
+GEMINI_API_KEY=your_gemini_key
+GROQ_API_KEY=your_groq_key
+# Optional: leave blank to use the project's default model.
+GEMINI_MODEL=
 ```
 
-The baseline uses threshold 0.80 with two matching frames. Shared feature models and the synthetic baseline are included; personalized models and private calibration recordings remain local. See training/VOICE_CALIBRATION.md for calibration.
+If you already have a `.env`, edit it without replacing it. Keep actual credentials out of Git and chat.
 
-## Character interface and longer commands
-
-The native PySide6 popup uses the supplied Bilal character/orb references, with eight expression states, crossfades, head gestures, blinking, speech articulation and microphone-driven glow. The default UI is a 96 by 120 pixel transparent companion at the bottom center of the active screen, above the taskbar. It shows only the person and orb. Click it to start or finish recording; drag it to reposition. Right-click or use the tray for settings and an optional separate conversation window. The tray can reopen it or quit the app. Windows SAPI reads replies when Speak replies is enabled; its installed voices determine pronunciation. The speaking pose follows real speech state. Success is shown only when the task trace contains verification without a failed tool.
-
-Recording waits 4 seconds of silence after speech, gives 10 seconds to start, and permits up to 90 seconds per command. Internal pauses are kept in the saved audio. Click the companion again while listening to end a command sooner, or Cancel/Escape to discard pending processing. Pauses longer than 4 seconds still finish a command automatically; this is not semantic end-of-speech prediction.
-
-The idle state uses the orb portrait; the other poses come from the supplied eight-expression reference. Real-time motion is animated in Qt, not a video or a 3D character rig. Colors and typography are configurable in brand_theme.json. Its current values follow the attached references; Notion brand guidelines are pending completion of the user's Notion connection.
-
-Render all states without microphone or API usage:
-
-```powershell
-.\venv\Scripts\python.exe .\main.py --preview-all
-```
-
-Screenshots are saved in the ignored ui_preview/ directory. Character assets and their prompts are documented in assets/character/ASSET_NOTES.md.
-
-The previous large card is hidden by default. Controls, typed requests and full replies are available only on demand through the tray menu. The character stays anchored while its head, eyes and mouth animate; vertical bobbing is disabled. Speech word events animate the mouth where supported, with a speaking-state fallback. This is a 2D animated sprite implementation, not a rigged 3D character.
-
-## Request grounding and diagnostics
-
-The current request takes precedence over completed tasks in conversation history. Ambiguous app targets should trigger clarification before an app is changed. Reports about a mistaken action are treated as reports, not new commands to execute their quoted text. Each reasoning run receives current Asia/Karachi date/time and tomorrow's calendar date; weather answers must establish the city and inspect the requested forecast day.
-
-logs/agent_latest.json points to the latest real task trace, including start time, model, previous request, current request, tool steps and outcome. Unit and diagnostic model tests disable runtime trace writing so they do not become the latest user task. These private files remain excluded from Git.
-
-The companion starts hidden while local wake-word monitoring stays active. A wake or manually initiated request reveals it. It stays visible through recording, execution and spoken output, then hides automatically after completion. Pending speech prevents early dismissal; a new request prevents an older dismissal timer from hiding an active task. The tray remains available while the avatar is hidden.
-
-Ctrl+C in the launching terminal requests a clean GUI shutdown. The signal handler does not raise inside animation callbacks; a GUI timer stops animation, speech and pending processing. Painter scopes always release their drawing device, including on exceptions. Quit Bilal from the tray is also supported.
-
-## Start automatically with Windows
-
-Windows sign-in startup is installed for the current user through a Bilal AI.lnk shortcut in Windows' configured Startup folder. It points to this project's venv/Scripts/pythonw.exe and launch_bilal.pyw, so no console window opens. The avatar stays hidden while local Hey Bilal listening is active; spoken replies use the default Windows audio output. Single-instance locking prevents duplicate microphones/windows.
-
-Microphone startup failures retry automatically with a bounded delay. JSON tool workers explicitly use the console Python interpreter with CREATE_NO_WINDOW, so background startup does not break their standard input/output. Diagnostics go to the ignored logs/background.log and logs/ui_startup.json files.
-
-Install/update startup:
-
-```powershell
-.\venv\Scripts\python.exe .\startup_windows.py
-```
-
-Disable automatic startup:
-
-```powershell
-.\venv\Scripts\python.exe .\startup_windows.py --remove
-```
-
-Startup runs after this Windows user signs in, not before login. The project directory and virtual environment must remain at their installed paths. It does not require a Codex scheduled task or administrator-level Windows service. Quit Bilal from its tray menu to stop it for the current session.
-
-## Six-area MVP work
-
-See [the baseline](docs/MVP_BASELINE.md) and [implementation/acceptance status](docs/MVP_IMPLEMENTATION.md). The software paths are implemented and tested, but live account workflows and fresh physical wake acceptance are still pending. Do not describe the MVP as fully validated.
-
-## Contextual input
-
-When a task needs a missing detail, the agent calls request_input. A small temporary box asks for it, including a complete recipient address for email. Enter or Continue submits the detail and closes the box; Cancel or Escape abandons the pending task. The original dictated subject/body remain in conversation context. The box is absent during ordinary tasks, and wake recording pauses while it awaits input. Providing an address is not sending approval: Gmail still requires its separate review step. Credentials should be entered only through account setup, never this popup.
-
-## Readiness and physical acceptance
-
-Run `python check_mvp_readiness.py --tests` with the project virtual environment for local readiness checks. The private report is saved to logs/mvp_readiness.json. No account APIs or microphone recording are invoked. See [field acceptance](docs/FIELD_ACCEPTANCE.md) for physical wake/speaker/sign-in checks, reviewed wake collection and the pending Gmail/Notion acceptance sequence. Failures are spoken when Speak replies is enabled.
-
-## Laptop power control
-
-Say ?Hey Bilal, put my laptop to sleep?, ?shut down my laptop?, or ?restart my laptop?. The model proposes request_system_power, then stops for a dedicated confirmation showing the exact action. Clicking Sleep now, Shut down now, or Restart now executes locally; Reject, closing the dialog, or cancellation executes nothing. Confirmations expire after two minutes and cannot be replayed. Save work before confirming. Generic controls and power shortcuts cannot substitute for this approval path.
-
-Shutdown/restart use a fixed local shutdown.exe argument list with /t 0 and no /f, preserving Windows' save-work handling. Sleep uses SetSuspendState with hibernation disabled and wake events retained. Windows permissions, hardware and application blockers can prevent an action; accepted requests do not count as verified shutdown/restart. While asleep, Bilal cannot hear Hey Bilal; wake the laptop through normal hardware controls first.
-
-Power tests use simulated Windows effects; no live power transition was performed during development. References: [Windows shutdown command](https://learn.microsoft.com/en-us/windows-server/administration/windows-commands/shutdown), [Windows sleep API](https://learn.microsoft.com/en-us/windows/win32/api/powrprof/nf-powrprof-setsuspendstate).
-
-## Wake activation and background video audio
-
-Wake activation now requires two local checks: the wake detector produces a candidate, then an offline Whisper base.en model must recognize the complete “Hey Bilal” phrase. The companion stays hidden during verification. Audio captured while verification runs is retained in RAM so the first command words are not lost. A wake-started command without that phrase in its final transcript is silently discarded before agent execution. Manual tray/click/typed requests still work normally.
-
-One-time setup after installing requirements:
+### 3. Install the offline wake verifier
 
 ```powershell
 .\venv\Scripts\python.exe .\setup_wake_verifier.py
 ```
 
-The public model is downloaded to the ignored models/wake_asr folder from a fixed SYSTRAN revision, with its published weight checksum verified. Wake verification runs locally with no provider calls. It uses wake-phrase vocabulary context plus a strict recognition-confidence gate; vocabulary context alone never activates it. Only after local phrase confirmation does normal command recording/transcription begin. Missing or failed verification disables automatic activation; it does not fall back to score-only activation. Restart Bilal after setup or updates.
+This downloads a roughly **145 MB** speech model plus supporting files into `models/wake_asr/`. The installer uses a fixed public model revision, verifies the weight checksum, and resumes interrupted downloads. It does not upload audio.
 
-This reduces false activation from ordinary video dialogue. It is not speaker recognition or playback echo cancellation: a video actually saying “Hey Bilal” can still trigger it. Real microphone testing with background playback remains necessary. [Local speech runtime](https://github.com/SYSTRAN/faster-whisper).
+### 4. Start Bilal
+
+```powershell
+.\venv\Scripts\python.exe .\main.py
+```
+
+Bilal starts **hidden**, with a system tray icon and local wake monitoring. Say:
+
+> Hey Bilal, open Spotify.
+
+Speak naturally in one utterance; the wake check buffers audio while it verifies the trigger. You can also start recording or type a request from the tray. Quit an existing instance from the tray before starting an updated version.
+
+## Everyday controls
+
+| Action | Control |
+| --- | --- |
+| Start or finish recording | Click the companion, or use the tray's recording action. |
+| Type a request or read a reply | Open **Read reply / type a request** from the tray. |
+| Provide a missing detail | Type or paste into the temporary input box; press **Enter** or **Continue**. |
+| Cancel pending work | Say “never mind” while processing, or use **Cancel request** / **Escape** in Bilal. |
+| Enable or disable activation | Toggle **Listen for Hey Bilal** in the tray. |
+| Enable or disable speech | Toggle **Speak replies** in the tray. |
+| Review waiting actions | Open **Pending approvals** in the tray. |
+| Exit the assistant | Choose **Quit Bilal** in the tray. |
+
+Command capture allows up to **90 seconds**, waits up to **10 seconds** for speech to start, and ends after **4 seconds of silence** following detected speech. Pauses longer than that can finish a recording. Cancellation prevents subsequent steps; it cannot undo an action already completed.
+
+### The companion
+
+The default interface is a **96 × 120 px** transparent character and orb near the bottom center of the screen. It animates through idle, listening, processing, speaking, success, error, loading, and inactive states. Drag it to reposition it; open the full conversation only when needed.
+
+The artwork is a 2D sprite system animated in Qt. Colors and typography live in [`brand_theme.json`](brand_theme.json); asset provenance is documented in [`assets/character/ASSET_NOTES.md`](assets/character/ASSET_NOTES.md).
+
+## How it works
+
+```mermaid
+flowchart LR
+    A[Hey Bilal] --> B[Local wake checks]
+    B --> C[Capture command]
+    C --> D[Groq transcription]
+    D --> E[Gemini agent]
+    E --> F[Local tools and connectors]
+    F --> G[Actual results]
+    G --> E
+    E --> H[Windows spoken reply]
+```
+
+The agent interprets the goal, chooses a tool, observes its returned result, and decides what to do next. Questions can be answered without desktop actions. Tasks have a **12-round / 180-second** reasoning budget, with bounded tool timeouts and cancellation checks.
+
+Desktop control uses Windows accessibility information. Each generic action invalidates previously observed control IDs, so the agent must inspect again before acting further. Launching an app or opening search results alone does not establish that the whole task succeeded.
+
+| Layer | Technology |
+| --- | --- |
+| Interface and animation | PySide6 / Qt |
+| Wake candidate detection | openWakeWord / ONNX |
+| Local phrase verification | Whisper base.en through faster-whisper / CTranslate2 |
+| Command transcription | Groq Whisper |
+| Reasoning and tool selection | Gemini through `google-genai` |
+| Windows app interaction | pywinauto / UI Automation |
+| Spoken output | Windows speech through Qt / SAPI |
+| Preferences and approvals | SQLite |
+| Account credential storage | Windows DPAPI |
+
+### Wake activation and background audio
+
+An acoustic detection score alone cannot activate the companion. Bilal checks a candidate with the offline phrase verifier, requiring the complete **“Hey Bilal”** phrase and a strict recognition score. The verifier uses wake vocabulary context; that context alone is not sufficient to activate it.
+
+The popup stays hidden during verification, and command audio is buffered locally. A wake-started command whose final transcript lacks the trigger is discarded before agent execution. If verification cannot load or fails, automatic activation is disabled; manual input remains available.
+
+**This is not speaker identification or playback echo cancellation.** Media actually saying “Hey Bilal” can still trigger Bilal. Background-video and real microphone testing remain necessary, and the extra check adds roughly two seconds on the development PC.
+
+## Optional account connections
+
+Bilal needs its **own** account authorization. Connecting an account to Codex does not connect the standalone assistant, and a Gemini API key does not grant Gmail or Notion access.
+
+### Gmail
+
+Enable the Gmail API in your Google project and obtain a **Desktop OAuth client JSON**. Then run:
+
+```powershell
+.\venv\Scripts\python.exe .\setup_connections.py gmail --client-json "C:\path\to\desktop-client.json"
+```
+
+Complete consent locally. Bilal supports plain-text drafts and an exact recipient/content review before sending. A changed draft needs a new review, and an approval can be used only once. Attachments are not connected. If a send outcome is uncertain, inspect Gmail Sent before retrying.
+
+### Notion
+
+Create a Notion integration with the required permissions and share the intended parent page with it. Then run:
+
+```powershell
+.\venv\Scripts\python.exe .\setup_connections.py notion
+```
+
+Enter the token at the hidden local prompt. Bilal can access only pages shared with the integration. Choose a real parent page before requesting a new note.
+
+Live account acceptance is still pending. See the [implementation status](docs/MVP_IMPLEMENTATION.md) and [field acceptance guide](docs/FIELD_ACCEPTANCE.md) for the remaining checks.
+
+## Privacy and control
+
+| Data or action | Where it goes |
+| --- | --- |
+| Wake candidates and phrase verification | Processed locally; candidate verification makes no provider calls. |
+| Recorded commands | Sent to Groq for transcription after activation or manual recording. |
+| Requests, relevant observations, and confirmed preferences | Shared with Gemini when used for reasoning. |
+| Desktop actions | Executed locally through defined tools. |
+| Connected account operations | Sent to the corresponding Gmail or Notion API. |
+| Account tokens | Stored locally with encryption tied to the current Windows user. |
+
+Local recordings, transcripts, replies, and task traces can contain private content. They are excluded from Git, along with learned state, account credentials, reviewed wake recordings, and downloaded verifier weights.
+
+Email sending and laptop power actions require a dedicated human confirmation. The agent has no approval tool and cannot operate its own approval windows. Generic controls block sending, publishing, deletion, purchases, authentication, security changes, and power actions. There is no model-generated shell-command executor.
+
+Power confirmations expire after two minutes. Shutdown and restart preserve Windows' save-work handling; the implementation does not force apps closed. While the laptop is asleep, Bilal cannot hear its trigger.
+
+## Start with Windows
+
+Install or update the current user's sign-in shortcut:
+
+```powershell
+.\venv\Scripts\python.exe .\startup_windows.py
+```
+
+Bilal then starts through `pythonw.exe` without a console window and remains hidden until activated. A single-instance lock prevents duplicate assistant instances. Startup runs **after sign-in**, not before login; keep the project and virtual environment at their installed paths.
+
+Remove automatic startup:
+
+```powershell
+.\venv\Scripts\python.exe .\startup_windows.py --remove
+```
+
+## Current limits
+
+- **App coverage:** discovering an installed app does not guarantee its interface can be automated. Canvas-only or inaccessible controls can block a task.
+- **Browser control:** public webpage reading and accessible controls are available; general browser DOM automation and screenshot-based reasoning are not implemented.
+- **Wake accuracy:** the classifier remains experimental. The phrase gate reduces false activation, but fresh voice and background-playback acceptance is still needed.
+- **Voice interruption:** offline cancellation uses Windows' English recognizer. Accent, distance, music, and noise can affect recognition.
+- **Account workflows:** Gmail and Notion need separate setup and live validation. Gmail attachment sending is unavailable.
+- **Power actions:** Windows permissions, open apps, and hardware support can prevent a request. Accepting a request is not proof the machine completed it.
+- **Learning:** preferences need confirmation, and wake labels need review. Candidate training does not automatically replace the deployed model.
+
+## Development
+
+### Run tests and readiness checks
+
+```powershell
+.\venv\Scripts\python.exe -m unittest discover -s tests -q
+.\venv\Scripts\python.exe .\check_mvp_readiness.py --tests
+```
+
+**Validation snapshot — 21 October 2026:** 123 automated tests passed. Coverage includes the agent loop, stale controls, recording, transcription, wake gating, contextual input, approvals, cancellation, media verification, shutdown cleanup, and mocked power actions. Account and power effects in these tests are simulated; passing them does not establish live account delivery or complete physical voice acceptance.
+
+The readiness report is written to the ignored `logs/mvp_readiness.json`. It checks local configuration without account API calls or microphone recording.
+
+### Improve wake recognition
+
+Use **Collect reviewed wake examples** from the tray for guided local recording and playback before labelling. Collect separate sessions with both the full trigger and non-trigger speech. Then evaluate and prepare a candidate:
+
+```powershell
+.\venv\Scripts\python.exe .\evaluate_wake_learning.py
+.\venv\Scripts\python.exe .\train_reviewed_wake.py --train-candidate
+```
+
+Training requires reviewed data from balanced sessions. Missing or changed clips are excluded. Candidates stay separate from the deployed model and need fresh microphone validation before promotion. See [voice calibration](training/VOICE_CALIBRATION.md).
+
+### Preview the interface
+
+```powershell
+.\venv\Scripts\python.exe .\main.py --preview-all
+```
+
+This renders the eight character states without microphone or API usage. Images are saved in the ignored `ui_preview/` folder.
+
+### Source map
+
+| Files | Responsibility |
+| --- | --- |
+| `main.py`, `ui_controller.py`, `contextual_input.py` | Companion UI, request lifecycle, and missing-detail popup |
+| `agent_core.py`, `agent_tools.py`, `request_router.py` | Model reasoning, tool declarations, and dispatch |
+| `wake_service.py`, `wake_verifier.py`, `wakeword_gate.py` | Wake monitoring, local phrase check, and temporal gate |
+| `audio_capture.py`, `stt_client.py`, `voice_cancel.py` | Recording, command transcription, and interruption |
+| `desktop_worker.py`, `app_tools.py` | Windows observation and app control |
+| `spotify_tools.py`, `spotify_worker.py` | Spotify search, playback, and verification |
+| `browser_tools.py`, `web_reader.py` | Browser opening, searches, and public text extraction |
+| `business_tools.py`, `power_tools.py` | Account workflows and confirmed power requests |
+| `memory.py`, `secret_store.py` | Persistent preferences, approvals, and encrypted credentials |
+| `startup_windows.py`, `launch_bilal.pyw` | Sign-in startup and silent launch |
+
+## Troubleshooting
+
+| Problem | First check |
+| --- | --- |
+| No window appears at launch | Normal: Bilal starts hidden. Look for its tray icon. |
+| “Bilal is already running” | Use the existing tray instance; quit it before restarting an update. |
+| Wake activation is unavailable | Run `setup_wake_verifier.py`, restart, and inspect `logs/ui_startup.json`. |
+| A video triggers the companion | Check whether it contained the full phrase; mark false activations from the tray and follow the background-playback test guide. |
+| Recording ends while thinking | Pauses over four seconds can end capture. Keep thinking pauses shorter; capture uses silence rather than semantic sentence completion. |
+| No audible reply | Enable **Speak replies**, check the default output device, and check installed Windows voices. |
+| Gmail or Notion is unavailable | Complete Bilal's standalone account setup and page permissions. |
+| A task fails or claims the wrong outcome | Inspect the private `logs/agent_latest.json` trace and saved transcript. |
+
+## Project documentation
+
+- [Implementation and acceptance status](docs/MVP_IMPLEMENTATION.md)
+- [Physical voice and account test guide](docs/FIELD_ACCEPTANCE.md)
+- [Wake calibration](training/VOICE_CALIBRATION.md)
+- [Character asset notes](assets/character/ASSET_NOTES.md)
+- [Pre-change MVP baseline](docs/MVP_BASELINE.md)
+
+When reporting an issue, include the Windows/app version, expected behavior, and a redacted transcript or relevant trace excerpt. Keep credentials and private recordings out of public issues.
