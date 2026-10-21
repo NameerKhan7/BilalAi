@@ -9,6 +9,7 @@ from agent_core import AgentBrain,AgentError
 from request_router import RequestProcessor,RequestCancelled
 from wake_service import WakeMonitor
 from voice_cancel import CancelListener,is_cancel_request,strip_wake_prefix
+from wake_verifier import command_after_wake
 from memory import LocalState
 from business_tools import BusinessWorkflows
 ROOT=Path(__file__).resolve().parent
@@ -27,19 +28,20 @@ class AssistantController(QObject):
         if self.monitor: self.monitor.resume()
     def wake_event(self,name,data):
         if name!='wake':self.emit(name,data);return
-        if self.closed or self.state!='idle' or self.pending_input:return
+        if self.closed or not self.wake_enabled or self.state!='idle' or self.pending_input:return
+        if not isinstance(data,dict) or data.get('phrase_verified') is not True:return
         self.state='recording';self.cancel=threading.Event();self.stop_capture=threading.Event()
         self.emit('wake_activated',{'sample_id':data.get('sample_id')})
         try:
             result=capture_command(CaptureConfig(calibration_seconds=0),stop_event=self.stop_capture,
                 on_event=self.emit,stream=data['stream'],leading_audio=data.get('leading_audio'))
-            threading.Thread(target=self._captured,args=(result,),daemon=True).start()
+            threading.Thread(target=self._captured,args=(result,True),daemon=True).start()
         except Exception:
             self.state='idle';self.emit('error','Wake capture failed. Try starting from the tray.');self.emit('finished',None)
-    def _captured(self,result):
+    def _captured(self,result,require_wake=False):
         try:
             if self.monitor:self.monitor.pause()
-            self._process_capture(result)
+            self._process_capture(result,require_wake=require_wake)
         except RequestCancelled:self.emit('cancelled',None)
         except (TranscriptionError,AgentError) as exc:self.emit('cancelled' if self.cancel.is_set() else 'error',None if self.cancel.is_set() else str(exc))
         except Exception:self.emit('error','The voice request could not finish.')
@@ -64,14 +66,14 @@ class AssistantController(QObject):
             if self.monitor: self.monitor.pause()
             config=CaptureConfig(calibration_seconds=0 if from_wake else .30)
             result=capture_command(config,stop_event=self.stop_capture,on_event=self.emit)
-            self._process_capture(result)
+            self._process_capture(result,require_wake=from_wake)
         except RequestCancelled: self.emit('cancelled',None)
         except (TranscriptionError,AgentError) as exc:self.emit('cancelled' if self.cancel.is_set() else 'error',None if self.cancel.is_set() else str(exc))
         except Exception: self.emit('error','The request could not finish. Your saved recording is kept locally.')
         finally:
             if self.cancel_listener:self.cancel_listener.stop()
             self.state='idle';self.emit('finished',None)
-    def _process_capture(self,result):
+    def _process_capture(self,result,require_wake=False):
         if self.cancel.is_set(): raise RequestCancelled()
         if not result.speech_detected:
             self.emit('empty','I didn’t hear a command. Try again when you’re ready.');return
@@ -82,6 +84,11 @@ class AssistantController(QObject):
         text=transcribe_recording(path)
         if self.cancel.is_set(): raise RequestCancelled()
         path.with_suffix('.txt').write_text(text+'\n',encoding='utf-8')
+        if require_wake:
+            command=command_after_wake(text)
+            if command is None:
+                self.emit('wake_rejected',None);return
+            text=command
         self.emit('transcript',text);self._agent(text,path)
     def send(self,text):
         text=text.strip()

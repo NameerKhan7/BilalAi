@@ -13,6 +13,7 @@ class BackgroundStartupTests(unittest.TestCase):
         monitor=WakeMonitor.__new__(WakeMonitor)
         monitor.enabled=threading.Event();monitor.enabled.set()
         monitor.stop=threading.Event();monitor.released=threading.Event();monitor.released.set()
+        monitor.verifier=Mock();monitor.rejected_candidates=0
         monitor.status='starting';events=[];monitor.callback=lambda name,data:events.append(name)
         model=Mock();model.predict.return_value={'hey_bilal':0}
         class Stream:

@@ -300,11 +300,11 @@ class AssistantWindow(QWidget):
         self.controller.set_wake(enabled)
         if self.controller.state=='idle':self.set_visual('idle' if enabled else 'inactive','Say “Hey Bilal”, or tap the microphone.' if enabled else 'Tap the microphone whenever you need me.')
     def handle_event(self,name,data):
-        if name=='wake' and self.controller.state=='idle':
-            self.show_center();self.reply.hide();self.transcript.hide();self.controller.record(from_wake=True)
-        elif name=='wake_activated':
+        if name=='wake_activated':
             self.last_wake_sample=data.get('sample_id')
             self.show_center();self.reply.hide();self.transcript.hide()
+        elif name=='wake_rejected':
+            self.character.level=0;self.verified=False;self.set_visual('idle');self.hide_if_idle()
         elif name=='input_needed':self.show_context_input(data)
         elif name=='input_cancelled':
             if self.input_dialog:
@@ -413,7 +413,8 @@ class AssistantWindow(QWidget):
         try:
             (ROOT/'logs/ui_startup.json').write_text(json.dumps({'pid':os.getpid(),'visible':self.isVisible(),
                 'size':[self.width(),self.height()],'speech_engine':self.speech.engine() if self.speech else None,
-                'wake_enabled':self.wake.isChecked(),'wake_status':monitor.status if monitor else 'disabled'}),encoding='utf-8')
+                'wake_enabled':self.wake.isChecked(),'wake_status':monitor.status if monitor else 'disabled',
+                'wake_guard':'offline_full_phrase','wake_verifier_loaded':bool(monitor and getattr(monitor.verifier,'model',None) is not None)}),encoding='utf-8')
         except OSError:pass
     def quit(self):
         if getattr(self,'shutting_down',False):return

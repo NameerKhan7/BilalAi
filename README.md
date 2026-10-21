@@ -154,3 +154,17 @@ Say ?Hey Bilal, put my laptop to sleep?, ?shut down my laptop?, or ?restart my l
 Shutdown/restart use a fixed local shutdown.exe argument list with /t 0 and no /f, preserving Windows' save-work handling. Sleep uses SetSuspendState with hibernation disabled and wake events retained. Windows permissions, hardware and application blockers can prevent an action; accepted requests do not count as verified shutdown/restart. While asleep, Bilal cannot hear Hey Bilal; wake the laptop through normal hardware controls first.
 
 Power tests use simulated Windows effects; no live power transition was performed during development. References: [Windows shutdown command](https://learn.microsoft.com/en-us/windows-server/administration/windows-commands/shutdown), [Windows sleep API](https://learn.microsoft.com/en-us/windows/win32/api/powrprof/nf-powrprof-setsuspendstate).
+
+## Wake activation and background video audio
+
+Wake activation now requires two local checks: the wake detector produces a candidate, then an offline Whisper base.en model must recognize the complete “Hey Bilal” phrase. The companion stays hidden during verification. Audio captured while verification runs is retained in RAM so the first command words are not lost. A wake-started command without that phrase in its final transcript is silently discarded before agent execution. Manual tray/click/typed requests still work normally.
+
+One-time setup after installing requirements:
+
+```powershell
+.\venv\Scripts\python.exe .\setup_wake_verifier.py
+```
+
+The public model is downloaded to the ignored models/wake_asr folder from a fixed SYSTRAN revision, with its published weight checksum verified. Wake verification runs locally with no provider calls. It uses wake-phrase vocabulary context plus a strict recognition-confidence gate; vocabulary context alone never activates it. Only after local phrase confirmation does normal command recording/transcription begin. Missing or failed verification disables automatic activation; it does not fall back to score-only activation. Restart Bilal after setup or updates.
+
+This reduces false activation from ordinary video dialogue. It is not speaker recognition or playback echo cancellation: a video actually saying “Hey Bilal” can still trigger it. Real microphone testing with background playback remains necessary. [Local speech runtime](https://github.com/SYSTRAN/faster-whisper).

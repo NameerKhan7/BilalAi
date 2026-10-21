@@ -63,12 +63,16 @@ class AcceptanceFlowTests(unittest.TestCase):
         stream=Mock();prefix=np.ones(12800,dtype=np.int16)
         def capture(config,**kwargs):kwargs['on_event']('ready');return result
         with patch('ui_controller.capture_command',side_effect=capture) as captured,patch('ui_controller.save_recording',return_value=Path(self.temp.name)/'command.wav'),patch('ui_controller.transcribe_recording',return_value='Hey Bilal, explain websites.'):
-            self.controller.wake_event('wake',{'stream':stream,'leading_audio':prefix,'sample_id':'fixture'})
+            self.controller.wake_event('wake',{'phrase_verified':True,'stream':stream,'leading_audio':prefix,'sample_id':'fixture'})
             self.pump(lambda:'finished' in self.events and self.speech.spoken==['Ready.'])
         self.assertIs(captured.call_args.kwargs['stream'],stream)
         self.assertIs(captured.call_args.kwargs['leading_audio'],prefix)
         self.assertEqual(self.window.last_wake_sample,'fixture');self.assertTrue(self.window.isVisible())
         self.speech.stop();self.pump(lambda:not self.window.isVisible())
+    def test_raw_wake_ui_event_cannot_bypass_verified_monitor(self):
+        with patch.object(self.controller,'record') as record:
+            self.window.handle_event('wake',{'stream':Mock()})
+        record.assert_not_called();self.assertFalse(self.window.isVisible())
     def test_failure_is_spoken_and_clears_previous_success(self):
         self.window.verified=True
         self.window.handle_event('error','Could not finish; please retry.')

@@ -243,3 +243,6 @@ data/
 .secrets/
 
 models/candidates/
+
+# Downloaded offline wake verification model
+models/wake_asr/

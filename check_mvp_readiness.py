@@ -38,6 +38,8 @@ def collect(run_tests=False):
         checks['microphone']={'status':'format_supported','physical_recording_test':'pending'}
     except Exception as exc:checks['microphone']={'status':'unavailable','error_type':type(exc).__name__}
     checks['speech']={'engines':QTextToSpeech.availableEngines(),'speaker_audibility_test':'pending'}
+    from wake_verifier import MODEL_DIRECTORY
+    checks['wake_verifier']={'status':'installed' if all((MODEL_DIRECTORY/name).is_file() for name in ['model.bin','config.json','tokenizer.json','vocabulary.txt']) else 'setup_required','candidate_audio_upload':False}
     try:checks['startup']=startup_status()
     except Exception as exc:checks['startup']={'status':'check_failed','error_type':type(exc).__name__}
     if run_tests:

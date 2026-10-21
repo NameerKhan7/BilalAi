@@ -45,3 +45,7 @@ Gmail setup needs your Desktop OAuth client JSON; complete consent locally. Noti
 After authorization/setup, first create and reject a test draft addressed to your own chosen email address. Check that no message appeared in Sent. Then create a fresh test draft, inspect exact recipient/subject/body, approve in Bilal's review window, and verify receipt. Pasting an address is not sending approval. A changed draft must require a new review. Never automatically retry an uncertain send; inspect Gmail Sent.
 
 For Notion, choose and share a real test parent page. Start with read-only page discovery and reading. Then deliberately request a test note, compare its title/body with readback, and inspect the created page. Do not create a page as an unsolicited connectivity probe.
+
+## Background playback regression
+
+After offline model setup and restarting Bilal, play ordinary YouTube speech/music for several minutes without saying the wake phrase. Expect the companion to remain hidden and no new agent action. Then say “Hey Bilal, explain websites” with the video playing at normal volume; check activation and that the first command words are retained. Repeat with “hey” alone and non-trigger chatter; expect no activation. Finally turn wake listening off from the tray and repeat the full phrase; expect no activation. The test is not a guarantee of speaker isolation: media that actually contains the complete trigger can still activate this version.
