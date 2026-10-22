@@ -15,11 +15,13 @@ SYSTEM_PROMPT='''You are BilalAI, Nameer's practical personal Windows assistant.
 
 AGENT_PROMPT="""You are BilalAI, Nameer's desktop agent. Understand the user's goal semantically, not by exact command wording. Answer ordinary questions directly. For actions, use available local tools, observe actual state, execute, verify, and continue until the goal is complete or a concrete blocker requires the user. You can discover installed apps and inspect/access their Windows controls; you are not limited to a hardcoded app-name list. Generic desktop tools work only with accessible controls and cannot guarantee every app.
 
-Conversation style: be a thoughtful, practical colleague. Use clear English, good grammar and natural vocabulary. Keep track of the project or assignment being discussed using the conversation context. When a useful next step or missing decision exists, ask one relevant follow-up question and wait; do not rush to sign off or repeatedly ask a generic 'anything else?'. A simple completed task does not need a forced question. Offer brief, warm, situational humor or light banter where appropriate, without sarcasm at the user's expense or jokes during errors and sensitive approvals. Never imply you are human or claim feelings, autonomous learning, or capabilities you do not have. Follow-ups are conversation, not authorization to perform additional actions; wait for the user's response. The UI handles listening and the 15-second idle timeout; do not claim you minimized or remained listening without UI evidence.
+Conversation style: be a thoughtful, practical colleague. Use clear English, good grammar and natural vocabulary. Keep track of the project or assignment being discussed using the conversation context. When a useful next step or missing decision exists, ask one relevant follow-up question and wait; do not rush to sign off or repeatedly ask a generic 'anything else?'. A simple completed task does not need a forced question. Offer brief, warm, situational humor or light banter where appropriate, without sarcasm at the user's expense or jokes during errors and sensitive approvals. Never imply you are human or claim feelings, autonomous learning, or capabilities you do not have. Follow-ups are conversation, not authorization to perform additional actions; wait for the user's response. The UI listens only after deliberate activation; releasing hold-to-talk stops capture. Ask your follow-up, then wait for a new activation. Do not claim you minimized or remained listening without UI evidence.
 
 The current request is the authoritative goal. If the user retracts or cancels an instruction within that same request, acknowledge cancellation without executing its earlier action. Distinguish a cancellation from discussing or quoting cancellation words. Previous completed tasks are context, not instructions to continue them. Use history only when the new request clearly refers to it. When an action has an unclear target or meaning, ask one short clarification before changing any app; do not pick an app just because it was used earlier or happens to be open. A vague request about a home screen with no clear app is insufficient to choose a target. If a transcript is incomplete or makes little sense, ask the user to restate it rather than invent missing words. If the user is reporting a mistaken action or quoting an earlier request, troubleshoot that report instead of executing the quoted action.
 
-When a task needs a missing address, person, city, app target or other detail that can be typed/pasted, call request_input with one short question. For email tasks with no complete recipient address, ask for it before creating a draft; preserve the supplied subject/body and continue when the user answers. Never invent a recipient or ask the user to dictate the whole email again. Do not request secrets through this input.
+When a task needs a missing detail, call request_input with one short English question. Use field=text for conversational details such as city, country, or topic: the UI speaks the question and the user answers with hold-to-talk. Use field=email for a precise address: the UI shows a paste field. For email tasks with no complete recipient address, ask for it before creating a draft; preserve the supplied subject/body and continue when the user answers. Never invent a recipient or ask the user to dictate the whole email again. Do not request secrets through this input.
+
+For factual questions, research quietly with web_search and read_webpage; do not use browser_search, open_site, or open_url unless the user explicitly asks to open/show a page. Opening a search tab is not research evidence. Search results are leads; read a relevant source and answer aloud with the result and its source. Stop after at most two searches and three page reads; do not reformulate endlessly, read an access/error page as evidence, or substitute an unrelated city. If evidence is unavailable, explain that blocker promptly. For prayer start times, prefer prayer_times with the confirmed city/country and requested ISO date; state the calculation method, distinguish start time from mosque congregation time, and never invent a location. The app has no automatic GPS/IP location provider. Use a saved preferred_city/location or conversation context; otherwise ask aloud.
 
 For time-sensitive facts, use live observations. Resolve today/tomorrow using the supplied current local date, explicitly identify the requested date, and establish the relevant location. A current-weather card is not evidence for tomorrow's forecast. Inspect the forecast for the requested day before answering. Ask for the city if it is not established. If you cannot verify the correct date/location, say so rather than present a current-day value as tomorrow.
 
@@ -82,6 +84,7 @@ class AgentBrain:
 
     def run(self,query,executor,cancel_event=None,on_progress=None,max_rounds=12):
         from agent_tools import TOOL_DECLARATIONS
+        from research_tools import ResearchGuard
         from request_router import RequestCancelled
         query=query.strip()
         if not query or len(query)>4000: raise AgentError('Enter a request under 4,000 characters.')
@@ -102,13 +105,14 @@ class AgentBrain:
             tools=[types.Tool(function_declarations=TOOL_DECLARATIONS)],
             automatic_function_calling=types.AutomaticFunctionCallingConfig(disable=True))
         trace=[];executor.trace=trace;uncertain_write=False;deadline=time.monotonic()+180
+        guard=ResearchGuard();model_rounds=0;provider_http_code=None;started=time.monotonic()
         previous_request=next((item['text'] for item in reversed(self.history) if item['role']=='user'),None)
         log_path=ROOT/'logs'/('agent_'+uuid.uuid4().hex[:10]+'.json')
         def save_trace(outcome):
             if not self.trace_enabled:return
             try:
                 log_path.parent.mkdir(exist_ok=True)
-                payload=json.dumps({'started_at':now.isoformat(),'model':self.model,'previous_request':previous_request,'request':query,'steps':trace,'outcome':outcome},ensure_ascii=False,indent=2)
+                payload=json.dumps({'started_at':now.isoformat(),'model':self.model,'previous_request':previous_request,'request':query,'steps':trace,'outcome':outcome,'model_rounds':model_rounds,'elapsed_seconds':round(time.monotonic()-started,2),'research_counts':guard.counts,'provider_http_code':provider_http_code},ensure_ascii=False,indent=2)
                 log_path.write_text(payload,encoding='utf-8')
                 (ROOT/'logs/agent_latest.json').write_text(payload,encoding='utf-8')
             except OSError: pass
@@ -118,6 +122,7 @@ class AgentBrain:
                     cancelled()
                     if time.monotonic()>deadline: break
                     if on_progress: on_progress('Thinking about the next step...')
+                    model_rounds+=1
                     response=client.models.generate_content(model=self.model,contents=contents,config=config)
                     cancelled()
                     calls=getattr(response,'function_calls',None) or []
@@ -147,6 +152,12 @@ class AgentBrain:
                     for call in calls:
                         cancelled()
                         name=call.name;args=dict(call.args or {})
+                        reason=guard.check(name,args)
+                        if reason:
+                            trace.append({'tool':name,'arguments':args,'result':{'ok':False,'stopped_by_guard':True,'error':reason}})
+                            reply="I stopped a repeated or over-budget lookup instead of opening more pages. I haven't verified the requested answer. Please narrow the request or provide a specific source."
+                            self.remember(query,reply);save_trace('research guard: '+reason);return reply
+                        step_started=time.monotonic()
                         if on_progress: on_progress('Working: '+name.replace('_',' '))
                         mutating=name in {'activate_control','enter_text','launch_app','spotify_play','browser_search','open_site','gmail_create_draft','notion_create_note','propose_memory','open_url','request_system_power'}
                         if mutating and uncertain_write:
@@ -164,7 +175,8 @@ class AgentBrain:
                                 result={'ok':False,'error':message}
                             if mutating: mutation_done=True
                         if result.get('outcome_uncertain'):uncertain_write=True
-                        trace.append({'tool':name,'arguments':args,'result':result})
+                        trace.append({'tool':name,'arguments':args,'result':result,'elapsed_ms':round((time.monotonic()-step_started)*1000),'round':model_rounds})
+                        save_trace('running')
                         if result.get('power_confirmation'):
                             reply=result['reply'];self.remember(query,reply);save_trace('awaiting power confirmation');return reply
                         parts.append(types.Part.from_function_response(name=name,response=result))
@@ -174,6 +186,7 @@ class AgentBrain:
         except RequestCancelled:
             save_trace('cancelled');raise
         except errors.APIError as exc:
+            provider_http_code=exc.code
             save_trace('provider failure')
             if exc.code in (401,403): message='Gemini rejected the key or project access. Check GEMINI_API_KEY.'
             elif exc.code==429: message='Gemini quota is exhausted; the agent cannot continue reasoning right now.'

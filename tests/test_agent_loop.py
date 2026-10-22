@@ -139,5 +139,14 @@ class AgentLoopTests(unittest.TestCase):
         self.assertFalse(tools.execute('run_shell',{'command':'calc'})['ok'])
         self.assertFalse(tools.execute('launch_app',{'app_id':'app','command':'calc'})['ok'])
         desktop.call.assert_not_called()
+    def test_repeated_search_stops_before_another_external_action_or_model_call(self):
+        self.client.models.generate_content.side_effect=[
+            response(calls=[('web_search',{'query':'Fajr Wah Cantt today'})]),
+            response(calls=[('web_search',{'query':'Fajr Wah Cantt today'})])]
+        self.executor.execute.return_value={'ok':False,'error':'blocked source'}
+        reply=self.brain.run('Tell me Fajr time.',self.executor)
+        self.assertEqual(self.client.models.generate_content.call_count,2)
+        self.executor.execute.assert_called_once();self.assertIn('stopped',reply)
+        self.assertTrue(self.executor.trace[-1]['result']['stopped_by_guard'])
 
 if __name__=='__main__': unittest.main()

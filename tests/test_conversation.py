@@ -46,7 +46,32 @@ class ConversationTests(unittest.TestCase):
         self.assertTrue(self.window.isVisible());self.assertTrue(self.controller.hold_event.is_set())
         self.controller.record.assert_called_once_with(mode='hold')
         self.controller.state='recording';self.window.hold_changed(False)
-        self.assertTrue(self.controller.stop_capture.is_set());self.assertTrue(self.window.conversation.active)
+        self.assertTrue(self.controller.stop_capture.is_set());self.assertFalse(self.window.conversation.active)
+        self.assertFalse(self.window.isVisible())
+        self.window.handle_event('thinking',None);self.window.handle_event('reply',{'text':'Answer.','verified':False})
+        self.assertFalse(self.window.isVisible())
+    def test_normal_application_does_not_reopen_microphone_after_answer(self):
+        self.window.conversation_enabled=False
+        self.window.handle_event('reply',{'text':'What city?','verified':False})
+        self.window.handle_event('finished',None);self.window.turn_timer.stop();self.window.continue_conversation()
+        self.controller.record.assert_not_called();self.assertFalse(self.window.isVisible())
+    def test_avatar_does_not_interrupt_processing_or_speech(self):
+        for state in ['thinking','transcribing','recording','approval']:
+            self.controller.state=state;self.window.avatar_clicked()
+        self.controller.state='idle';self.window.speech_pending=True;self.window.avatar_clicked()
+        self.controller.record.assert_not_called();self.assertFalse(self.controller.cancel.is_set())
+    def test_city_question_is_spoken_without_a_popup_and_can_be_answered(self):
+        self.controller.pending_input={'field':'text','question':'Which city?'}
+        self.window.handle_event('input_needed',self.controller.pending_input)
+        self.assertIsNone(self.window.input_dialog)
+        self.window.hold_changed(True);self.controller.record.assert_called_once_with(mode='hold')
+        result=CaptureResult(np.ones(16000,dtype=np.int16),16000,'manual',True,.008)
+        processor=Mock();processor.handle.return_value=Mock(reply='The timing is available.');processor.last_trace=[]
+        self.controller.processor=processor
+        with patch('ui_controller.save_recording',return_value=Path(self.temp.name)/'command.wav'),patch('ui_controller.transcribe_recording',return_value='Wah Cantt'):
+            self.controller._process_capture(result,mode='clarification')
+        self.assertIsNone(self.controller.pending_input)
+        self.assertIn('Wah Cantt',processor.handle.call_args.args[0]);self.assertIn('Which city?',processor.handle.call_args.args[0])
     def test_holding_never_dismisses_even_after_conversation_end(self):
         self.window.hold_changed(True);self.window.end_conversation();self.window.hide_if_idle()
         self.assertTrue(self.window.isVisible())

@@ -43,6 +43,9 @@ def read_webpage(url,session=None,start=0):
         title=soup.title.get_text(' ',strip=True) if soup.title else ''
         region=soup.find('main') or soup.find('article') or soup
         text=region.get_text(' ',strip=True)
+        lowered=text.casefold()
+        if (len(text)<200 and any(hint in lowered for hint in ['trouble accessing google search','enable javascript','unusual traffic','verify you are human'])) or not text:
+            return {'ok':False,'url':url,'error':'The source returned a blocked/empty page, not readable evidence. Use another source; do not repeat this page.','untrusted_content':True}
         return {'ok':True,'url':url,'title':title,'text':text[start:start+14000],'start':start,'next_start':str(start+14000) if len(text)>start+14000 else None,
                 'truncated':size>768000 or len(text)>start+14000,'untrusted_content':True}
     raise ValueError('Too many redirects.')

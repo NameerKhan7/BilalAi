@@ -36,7 +36,7 @@ Minimum training preparation requires ten valid reviewed clips per class and two
 .\venv\Scripts\python.exe .\train_reviewed_wake.py --train-candidate
 ```
 
-Training outputs a separate candidate. Collect independent microphone evaluation samples after training before considering promotion. Keep the baseline deployed until acceptance demonstrates improvement without increased false triggers. This work has not changed its threshold or trained/promoted a new model.
+Training outputs a separate candidate. Collect independent microphone evaluation samples after training before considering promotion. Keep the baseline deployed until acceptance demonstrates improvement without increased false triggers. The live candidate policy differs from the standalone diagnostic threshold; no new classifier weights were trained/promoted.
 
 ## Gmail and Notion ? live tests pending
 
@@ -52,11 +52,17 @@ For Notion, choose and share a real test parent page. Start with read-only page 
 
 After offline model setup and restarting Bilal, play ordinary YouTube speech/music for several minutes without saying the wake phrase. Expect the companion to remain hidden and no new agent action. Then say “Hey Bilal, explain websites” with the video playing at normal volume; check activation and that the first command words are retained. Repeat with “hey” alone and non-trigger chatter; expect no activation. Finally turn wake listening off from the tray and repeat the full phrase; expect no activation. The test is not a guarantee of speaker isolation: media that actually contains the complete trigger can still activate this version.
 
-## Conversation and global hold acceptance — 23 October 2026
+## Explicit activation and global hold acceptance — 23 October 2026
 
-1. From another application, hold **left Ctrl + left Shift**. Expect the companion to appear and record. Right-side modifiers alone should not start it. Other applications still receive these modifiers.
-2. Say a harmless question, pause over four seconds while keeping both keys held, and continue. Expect capture to remain active. Release either key; expect transcription and an English answer containing both parts.
-3. After the spoken reply ends, answer its question or give a contextual follow-up without saying the trigger. Expect another turn. Check that microphone capture does not run during Bilal's spoken output.
-4. After a reply, stay silent for fifteen seconds. Expect the companion to hide and wake monitoring to resume. Repeat and say “we are done” instead; expect a short closing reply and no further capture.
-5. During a missing-input or approval dialog, press/release the shortcut. Expect no submission or approval. Complete or reject the dialog manually.
-6. Test the full wake phrase at normal distance and with ordinary media playback. Verify activation and retained first command words; do not treat saved-clip replay as proof of current microphone accuracy. While a conversation is active, detected background speech can count as a follow-up: end/cancel the session when it should stop listening.
+1. From another application, hold **left Ctrl + left Shift**. Expect the companion to appear and record. Right-side modifiers alone should not start it; other applications still receive the modifiers.
+2. Say a harmless question, pause over four seconds while held, and continue. Release either key. Expect immediate hiding, one transcription, background processing, and an audible English answer containing both parts. It should not reappear just to speak the answer.
+3. After the reply, speak ordinary background chatter without wake/manual/hold activation. Expect no new command capture. Automatic 15s follow-up listening is disabled by default.
+4. Click the avatar while a task is processing or Windows speech is speaking. Expect no new microphone recording or duplicate request.
+5. Ask for a prayer start time without a city. Expect a spoken city/country clarification and no text box. Answer using hold-to-talk, then repeat with a verified “Hey Bilal” answer; expect the original date/task to continue. A location preference is not silently saved.
+6. Ask for a draft without an email recipient. Expect the email paste dialog. Press/release the shortcut while that dialog or an approval is open; expect no submission or approval. Cancel the test unless live account testing is explicitly authorized.
+7. Request a prayer calculation for an explicitly supplied city/country/date. Expect quiet lookup without Chrome tabs, the resolved city/country, calculation method and timezone, and a distinction between prayer start and mosque congregation time. Blocked sources should produce a prompt blocker within bounded research attempts, not endless searches or a guessed city.
+8. Test the full wake phrase at normal distance and with ordinary media playback. Verify activation and retained first words. Saved-clip replay is not proof of current microphone accuracy; actual media containing the full phrase can still trigger this version.
+
+Record actual pass/fail and redacted evidence. These are manual acceptance steps, not a claim that they have passed.
+
+For location regression, deliberately supply an ambiguous city/country and expect clarification rather than a guessed location. Confirm the displayed resolved place is intended. A coordinate/date/method mismatch must fail instead of returning a confident prayer time. Nominatim geocoding and Aladhan calculations are external sources, not proof of a mosque congregation schedule.

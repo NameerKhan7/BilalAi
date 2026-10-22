@@ -11,6 +11,7 @@ from agent_core import AgentError
 from business_tools import BusinessWorkflows,ConnectionRequired
 from web_reader import read_webpage
 from memory import LocalState
+from research_tools import web_search,prayer_times
 
 def declaration(name, description, properties, required=()):
     return types.FunctionDeclaration(name=name, description=description,
@@ -18,8 +19,10 @@ def declaration(name, description, properties, required=()):
                                 'required':list(required),'additionalProperties':False})
 S={'type':'string'}
 TOOL_DECLARATIONS=[
+    declaration('web_search','Research a factual question quietly. Returns result titles, snippets and source URLs without opening Chrome. Read relevant sources before date-sensitive answers.',{'query':S},['query']),
+    declaration('prayer_times','Get date-specific calculated prayer start times without browser tabs. Use a confirmed city/country and ISO date YYYY-MM-DD. State the calculation method; default 1 is Karachi. Not a mosque congregation time. Never invent the user location.',{'city':S,'country':S,'day':S,'method':S},['city','country','day']),
     declaration('request_system_power','Request this laptop to sleep, shut down or restart. Only proposes a fresh human confirmation; it never executes power control. No arbitrary commands or remote targets.',{'action':{'type':'string','enum':['sleep','shutdown','restart']}},['action']),
-    declaration('request_input','Pause the task and ask one short question in English for a missing detail the user needs to type or paste. Use email for a missing recipient address, text for other non-secret details. Never request passwords, tokens or payment details.',{'question':S,'field':{'type':'string','enum':['email','text']}},['question','field']),
+    declaration('request_input','Pause and ask one short English question. Use email for an exact address (paste dialog), text for conversational details such as city (spoken question, answer by hold-to-talk). Never request secrets.',{'question':S,'field':{'type':'string','enum':['email','text']}},['question','field']),
     declaration('list_apps','Discover installed apps. Returns registered IDs; use only returned IDs to launch.',{}),
     declaration('launch_app','Launch an installed app by a returned app_id. A launch is not task completion.',{'app_id':S},['app_id']),
     declaration('list_windows','Discover currently open application windows and their IDs.',{}),
@@ -99,6 +102,8 @@ class AgentToolExecutor:
         if name in {'spotify_play','browser_search','open_site','open_url','gmail_create_draft','notion_create_note'} and isinstance(self.desktop,DesktopBridge) and self.desktop.process is not None:
             self.desktop.call('invalidate_observation',{},cancel_event)
         try:
+            if name=='web_search':return web_search(**args)
+            if name=='prayer_times':return prayer_times(**args)
             if name=='request_system_power':return self.business.power.request(**args)
             if name=='request_input':
                 if not args['question'].strip() or len(args['question'])>500:raise ValueError('Ask one short question.')
@@ -114,7 +119,9 @@ class AgentToolExecutor:
             if name=='notion_read':return self.business.notion.read(**args)
             if name=='notion_create_note':return self.business.notion.create_note(**args)
         except requests.RequestException:
-            return {'ok':False,'outcome_uncertain':name in {'gmail_create_draft','notion_create_note'},'error':'The network request failed. Creation may already have happened; do not automatically repeat a write.'}
+            writing=name in {'gmail_create_draft','notion_create_note'}
+            message='The network request failed. Creation may already have happened; do not automatically repeat a write.' if writing else 'The requested service could not be reached. No result was verified.'
+            return {'ok':False,'outcome_uncertain':writing,'error':message}
         except (ConnectionRequired,ValueError,RuntimeError) as exc:
             return {'ok':False,'outcome_uncertain':name in {'gmail_create_draft','notion_create_note'} and isinstance(exc,RuntimeError) and not isinstance(exc,ConnectionRequired),'error':str(exc)}
         if name=='spotify_play':

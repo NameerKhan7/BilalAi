@@ -4,7 +4,7 @@
 
 Bilal needs both repeatable software tests and real use on the target PC. A mocked send is not a delivered email, an installed speech engine is not an audible reply, and a configured startup shortcut is not a successful sign-in run.
 
-**Latest regression:** 141 automated tests passed on **23 October 2026** with native Windows support. These cover simulated audio/providers and mocked external effects. Live Gmail/Notion acceptance, fresh physical voice/background-media testing, real keyboard/microphone acceptance, and sign-in acceptance remain pending.
+**Latest regression:** 154 automated tests passed on **23 October 2026** with native Windows support. These cover simulated audio/providers and mocked external effects. Live Gmail/Notion acceptance, fresh physical voice/background-media testing, real keyboard/microphone acceptance, and sign-in acceptance remain pending.
 
 ## Run the regression suite
 
@@ -14,7 +14,7 @@ From the project root, using its virtual environment:
 .\venv\Scripts\python.exe -m unittest discover -s tests -q
 ```
 
-The hold/session tests cover endpoints, modifier-state edges, UI presence, release, no-speech timeout, explicit end, and speech/input/approval interactions. Native microphone/hotkey acceptance remains separate.
+The hold/session tests cover endpoints, modifier-state edges, UI presence, release, default no-auto-follow-up behavior, release hiding, spoken clarification, and speech/input/approval interactions. Native microphone/hotkey acceptance remains separate.
 
 The suite uses simulated providers and side effects. It should not be treated as permission to send mail, create live account content, or power off the PC. Select relevant tests during development, then run the full suite for changes that cross the controller, agent, tool, or approval boundaries.
 
@@ -57,13 +57,14 @@ Quit any previous instance from its tray menu and launch the updated app. Record
 | Launch without speaking | One tray instance; companion hidden. |
 | Ordinary speech/music or YouTube without the trigger | No companion activation and no agent task. |
 | “hey” alone, “hee haa,” or similar non-trigger sounds | No activation. |
-| Full “Hey Bilal” followed immediately by a harmless question | Activation, first words preserved, complete answer aloud, then a follow-up listening window. |
-| Speak a follow-up after the answer without repeating the trigger | Correct contextual response;15s timeout begins only when ready for new speech. |
-| No new speech after reply | No command upload; session ends/hides after 15s without speech. |
-| Say “we are done” or “stop listening” | Session closes; no agent tool task for that ending. |
-| Hold left Ctrl + left Shift, pause over4s, continue, then release | Capture survives the thinking pause; release submits once; companion stays present while held. |
+| Full “Hey Bilal” followed immediately by a harmless question | Activation, first words preserved, complete answer aloud, then hidden without automatic follow-up capture. |
+| After a reply, speak without wake/hold/manual activation | No automatic new command recording. |
+| Hold left Ctrl + left Shift, pause over4s, continue, then release | Capture survives the thinking pause; release submits once and hides immediately; background processing/audio continue without reopening the mic. |
 | Hold/release during TTS, input, or approval | No self-recorded reply; no shortcut submission or approval of dialogs; no duplicate capture. |
 | Dictated request with a three-second thinking pause | Command continues across the pause. A pause over four seconds may end capture by design. |
+| Missing city/country | Spoken clarification with no text dialog; hold-to-talk or verified wake answer resumes the original lookup. |
+| Quiet prayer lookup | Confirmed city/date/method yields sourced calculated start times, no browser tabs, bounded retries or a clear blocker. |
+| Click avatar during processing or SAPI speech | Click ignored; no extra recording or task. |
 | Missing email recipient | Contextual input appears; invalid address does not continue; cancellation stops the request. |
 | “never mind” during a harmless processing request | Stops subsequent work. Completed actions cannot be undone. |
 | Wake listening disabled in the tray | Full phrase does not automatically activate the companion. |
@@ -139,3 +140,13 @@ The first-candidate audio-window replay, including the classifier gate and local
 Full-file verifier checks and candidate-window checks are different: the verifier alone accepted one historical negative after this recalibration, while the classifier prevented that clip from activating. Both gates remain necessary. Do not describe these results as zero false activations in general, speaker identification, or fresh YouTube/microphone acceptance. The live shortcut and normal-distance wake tests below remain necessary.
 
 A harmless live Gemini assignment prompt produced a relevant English clarification about the assignment topic with desktop/account tools disabled. This checks one conversational example, not every follow-up or humor response.
+
+## Research regression checks
+
+Check quiet search and prayer adapters with fake HTTP responses, including blocked RSS, empty results, wrong date, incomplete timing data, repeated calls, and exhausted per-run budgets. A blocked 102-character Google error response must not become verified research evidence. Live-source availability and physical microphone behavior need separate evidence. Inspect trace timing/counters and partial checkpoints when diagnosing slow tasks; a provider HTTP error is different from a blocked source response. The latest 154-test run covers these regression checks; live-source and physical acceptance still require their own evidence.
+
+## Latest research evidence — 23 October 2026
+
+The latest validation run passed 154 automated tests on native Windows. A live Bing RSS search returned usable results. A live Gemini Fajr request used one `prayer_times` call with zero browser-opening attempts and answered **4:57 AM for Wah Cantt on 23 October 2026**, stating the Karachi calculation method and distinguishing prayer start from congregation time. This is evidence for that single city/date/run, not a standing current prayer time or proof of every location/method.
+
+The earlier city-name endpoint returned unrelated coordinates; the current coordinate flow resolves the settlement independently and checks returned coordinates, date and method. Regression fixtures reject mismatched coordinates and invalid/ambiguous location responses. Live Gmail/Notion delivery, physical microphone/hotkey use, and real power transitions remain separate acceptance work.

@@ -136,7 +136,8 @@ class VoiceWave(QWidget):
 class AssistantWindow(QWidget):
     def __init__(self,preview=False,conversation_enabled=None):
         super().__init__();self.preview=preview;self.visual='idle';self.verified=False;self.speech_pending=False;self.pending_dialog=None;self.input_dialog=None;self.last_wake_sample=None
-        self.conversation_enabled=not preview if conversation_enabled is None else conversation_enabled
+        self.conversation_enabled=False if conversation_enabled is None else conversation_enabled
+        self.hold_started=False;self.hold_background=False
         self.conversation=ConversationSession();self.hotkey=None
         self.turn_timer=QTimer(self);self.turn_timer.setSingleShot(True);self.turn_timer.timeout.connect(self.continue_conversation)
         self.setWindowTitle('Bilal AI');self.setWindowFlags(Qt.WindowType.FramelessWindowHint|Qt.WindowType.Tool|Qt.WindowType.WindowStaysOnTopHint)
@@ -188,7 +189,7 @@ class AssistantWindow(QWidget):
                 painter.setRenderHint(QPainter.RenderHint.Antialiasing);painter.setPen(Qt.PenStyle.NoPen)
                 painter.setBrush(color('accent'));painter.drawEllipse(8,8,48,48)
             self.tray=QSystemTrayIcon(QIcon(icon),self);menu=QMenu()
-            show=menu.addAction('Show Bilal');show.triggered.connect(self.show_center)
+            show=menu.addAction('Show Bilal');show.triggered.connect(self.show_requested)
             listen=menu.addAction('Start / finish recording');listen.triggered.connect(self.record)
             cancel=menu.addAction('Cancel request');cancel.triggered.connect(self.cancel_task)
             details=menu.addAction('Read reply / type a request');details.triggered.connect(self.show_details)
@@ -203,7 +204,7 @@ class AssistantWindow(QWidget):
             clear=menu.addAction('Clear conversation');clear.triggered.connect(self.clear_conversation)
             quit_action=menu.addAction('Quit Bilal');quit_action.triggered.connect(self.quit)
             self.tray.setContextMenu(menu);self.tray.setToolTip('Bilal AI — your desktop companion')
-            self.tray.activated.connect(lambda reason:self.show_center() if reason==QSystemTrayIcon.ActivationReason.Trigger else None)
+            self.tray.activated.connect(lambda reason:self.show_requested() if reason==QSystemTrayIcon.ActivationReason.Trigger else None)
             self.tray.show()
             self.hotkey=HoldToTalk(self);self.hotkey.changed.connect(self.hold_changed);self.hotkey.start()
         self.drag=None;self.moved=False
@@ -219,11 +220,16 @@ class AssistantWindow(QWidget):
         self.conversation.held=held
         if not held:
             self.controller.hold_event.clear()
+            if not self.hold_started:return
+            self.hold_started=False;self.hold_background=True;self.end_conversation();self.hide()
             if self.controller.state=='recording':self.controller.finish_recording()
-            elif not self.conversation.active:self.dismiss_when_idle()
+            else:self.dismiss_when_idle()
             return
         # A shortcut must never submit input or approve an action.
-        if self.input_dialog or self.pending_dialog or self.controller.pending_input:return
+        if self.input_dialog or self.pending_dialog:return
+        if self.controller.pending_input and self.controller.pending_input.get('field')=='email':return
+        if self.controller.state not in {'idle','recording'}:return
+        self.hold_started=True;self.hold_background=False
         self.controller.hold_event.set();self.begin_conversation();self.show_center()
         if self.speech:self.speech.stop()
         if self.controller.state=='idle':self.controller.record(mode='hold')
@@ -231,7 +237,8 @@ class AssistantWindow(QWidget):
         if not self.controller or getattr(self,'shutting_down',False):return
         if self.controller.state!='idle' or self.speech_pending:return
         if self.speech and self.speech.state()==QTextToSpeech.State.Speaking:return
-        if self.input_dialog or self.pending_dialog or self.controller.pending_input:return
+        if self.input_dialog or self.pending_dialog:return
+        if self.controller.pending_input and self.controller.pending_input.get('field')=='email':return
         if self.conversation_enabled and self.conversation.active:
             self.controller.record(mode='hold' if self.conversation.held else 'followup')
         else:
@@ -240,6 +247,7 @@ class AssistantWindow(QWidget):
         self.visual=state;self.character.set_state(state);self.title.setText(TITLES[state])
         if subtitle:self.subtitle.setText(subtitle)
     def show_center(self):
+        if self.hold_background and not self.conversation.held:return
         # Keep the familiar entry point, but anchor the companion above the taskbar.
         screen=QApplication.screenAt(self.cursor().pos()) or QApplication.primaryScreen()
         area=screen.availableGeometry()
@@ -247,6 +255,8 @@ class AssistantWindow(QWidget):
         self.show();self.raise_()
         self.fade=QPropertyAnimation(self,b'windowOpacity');self.fade.setDuration(180)
         self.fade.setStartValue(.25);self.fade.setEndValue(1);self.fade.start()
+    def show_requested(self):
+        self.hold_background=False;self.show_center()
     def show_details(self):
         if self.details is None:
             self.details=QDialog()
@@ -321,11 +331,15 @@ class AssistantWindow(QWidget):
     def record(self):
         if self.controller.state=='recording':self.controller.finish_recording();self.mic.setEnabled(False)
         elif self.controller.state=='idle':
+            self.hold_background=False
             self.begin_conversation()
             if self.speech:self.speech.stop()
             self.reply.hide();self.transcript.hide();self.controller.record()
     def send_text(self):
         text=self.input.toPlainText().strip()
+        if text and self.controller.pending_input and self.controller.pending_input.get('field')=='text':
+            if self.controller.submit_input(text):self.input.clear()
+            return
         if text:self.begin_conversation();self.reply.hide();self.controller.send(text);self.input.clear()
     def cancel_task(self):
         self.end_conversation()
@@ -337,13 +351,16 @@ class AssistantWindow(QWidget):
         if self.controller.state=='idle':self.set_visual('idle' if enabled else 'inactive','Say “Hey Bilal”, or tap the microphone.' if enabled else 'Tap the microphone whenever you need me.')
     def handle_event(self,name,data):
         if name=='wake_activated':
+            self.hold_background=False
             self.begin_conversation()
             self.last_wake_sample=data.get('sample_id')
             self.show_center();self.reply.hide();self.transcript.hide()
         elif name=='wake_rejected':
             self.end_conversation()
             self.character.level=0;self.verified=False;self.set_visual('idle');self.hide_if_idle()
-        elif name=='input_needed':self.show_context_input(data)
+        elif name=='input_needed':
+            if data.get('field')=='email':self.show_context_input(data)
+            else:self.setToolTip('Hold left Ctrl + left Shift to answer the spoken question.')
         elif name=='input_cancelled':
             if self.input_dialog:
                 self.input_dialog.handled=True;self.input_dialog.close();self.input_dialog=None
@@ -439,7 +456,13 @@ class AssistantWindow(QWidget):
             if self.moved:self.move(position)
     def mouseReleaseEvent(self,event):
         clicked=self.drag is not None and not self.moved;self.drag=None
-        if clicked and self.controller:self.record()
+        if clicked:self.avatar_clicked()
+    def avatar_clicked(self):
+        if not self.controller or self.controller.state!='idle' or self.speech_pending:return
+        if self.visual in {'processing','loading','listening','speaking'}:return
+        if self.pending_dialog or self.input_dialog:return
+        if self.speech and self.speech.state()==QTextToSpeech.State.Speaking:return
+        self.record()
     def closeEvent(self,event):
         if not self.preview:
             event.ignore();self.cancel_task();self.hide()

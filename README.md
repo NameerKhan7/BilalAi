@@ -20,7 +20,7 @@
 
 ---
 
-Bilal combines voice input, an LLM agent, and tools that operate on your PC. Say **“Hey Bilal”** to bring up a small animated companion, speak your request, and hear the reply. After the reply, the companion stays available for a follow-up without another wake phrase. It hides after 15 seconds without new speech, an explicit conversation ending, or cancellation.
+Bilal combines voice input, an LLM agent, and tools that operate on your PC. Say **“Hey Bilal”** to bring up a small animated companion, speak your request, and hear the reply. The companion hides after the reply. Automatic follow-up listening is disabled by default; use the wake phrase, hold-to-talk, or manual input for each new turn.
 
 When something is missing, Bilal asks. When an email is ready to send or a power action is requested, it waits for your confirmation.
 
@@ -33,7 +33,7 @@ When something is missing, Bilal asks. When an email is ready to send or a power
 | Answer questions | “What's the difference between a website and a web app?” | A conversational answer through Gemini and Windows speech. |
 | Work with desktop apps | “Open Notion.” | Discovers registered apps, launches them, and inspects accessible Windows controls. |
 | Play music | “Play Blinding Lights by The Weeknd on Spotify.” | Searches Spotify and checks the actual playback result. |
-| Search and read the web | “Search YouTube for Pakistani food.” | Opens supported searches in Chrome; reads public webpage text through a separate tool. |
+| Research facts or open a search | “What is the Fajr start time tomorrow in Karachi, Pakistan?” | Quiet search/public reading or date-specific prayer calculation; Chrome opens only when explicitly requested. |
 | Prepare email | “Draft an email saying our meeting is tomorrow at 3 PM.” | Asks for missing details, creates an unsent Gmail draft, and presents it for review. Requires Gmail setup. |
 | Work in Notion | “Find my Bilal AI page.” | Searches and reads shared pages; can create and read back a requested note. Requires Notion setup. |
 | Remember preferences | “Remember that my preferred city is Karachi.” | Proposes a memory and saves it locally after you confirm. |
@@ -51,7 +51,7 @@ You can dictate an email before providing the recipient:
 4. **Bilal:** Continues with the content you already dictated and prepares the draft.
 5. **You:** Review the recipient, subject, and body, then approve or reject sending.
 
-The input box appears when a detail is needed and closes after submission or cancellation. Providing an address does **not** approve sending.
+The input box appears for an email address and closes after submission or cancellation. General details such as a city are asked aloud; hold left Ctrl + left Shift or say “Hey Bilal” with the answer to continue the original task. Providing an address does **not** approve sending.
 
 ## Quick start
 
@@ -130,9 +130,9 @@ Speak naturally in one utterance; the wake check buffers audio while it verifies
 
 Ordinary wake/manual capture allows up to **90 seconds**, waits up to **10 seconds** for speech to start, and ends after **4 seconds of silence** following detected speech. A new hold-to-talk capture suppresses silence/no-speech stopping while the keys remain held; release submits it, with a **600-second chunk bound**. Processing a bounded chunk does not hide the companion while the keys are held.
 
-After a reply finishes, Bilal listens for the next utterance for **15 seconds**. Once speech begins, the usual four-second ending silence applies; a new wake phrase is unnecessary during this active session. Say **“we are done”**, **“goodbye Bilal”**, or **“stop listening”** to end it. No full-command capture runs during spoken output, missing input, or approval.
+Automatic follow-up capture is disabled by default. Releasing hold-to-talk hides the companion immediately and sends the captured request for background processing; spoken output can continue while it stays hidden. It does not start another command recording after the answer. A busy or speaking avatar ignores clicks.
 
-**During an active session, captured follow-up speech goes to Groq and its request goes to Gemini**, including background speech detected as an utterance. A silent follow-up wait is not uploaded. The global shortcut polls only the two left modifier states; it does not log typing or consume the keys from other apps. Cancellation stops later steps and cannot undo completed actions.
+The global shortcut polls only the two left modifier states; it does not log typing or consume keys from other apps. General clarification questions are spoken and answered with hold-to-talk or a verified “Hey Bilal” turn; an email address still uses a paste box. Cancellation stops later steps and cannot undo completed actions.
 
 ### The companion
 
@@ -211,7 +211,7 @@ Live account acceptance is still pending. See the [implementation status](docs/M
 | Data or action | Where it goes |
 | --- | --- |
 | Wake candidates and phrase verification | Processed locally; candidate verification makes no provider calls. |
-| Recorded commands and active-session follow-ups | Sent to Groq after wake/manual/hold activation or detected follow-up speech; silent follow-up waits are not uploaded. |
+| Recorded commands and spoken clarification answers | Sent to Groq after explicit wake/manual/hold capture; automatic follow-up recording is off by default. |
 | Requests, relevant observations, and confirmed preferences | Shared with Gemini when used for reasoning. |
 | Desktop actions | Executed locally through defined tools. |
 | Connected account operations | Sent to the corresponding Gmail or Notion API. |
@@ -239,6 +239,10 @@ Remove automatic startup:
 .\venv\Scripts\python.exe .\startup_windows.py --remove
 ```
 
+### Quiet research
+
+Factual questions use quiet Bing RSS search and public webpage reading without opening tabs. Search can be blocked; snippets alone do not verify a changing fact. Research is bounded in code per run: two searches, three page reads, two browser openings, and two prayer lookups, with identical repeats blocked. Prayer lookup independently resolves the confirmed city/country through Nominatim/OpenStreetMap, then requests Aladhan by coordinates, date, and calculation method (default 1, Karachi). It cross-checks returned coordinates/date/method rather than trusting a city-name response. These are calculated prayer starts, not mosque congregation times. No GPS/IP location is inferred; a missing city is asked aloud.
+
 ## Current limits
 
 - **App coverage:** discovering an installed app does not guarantee its interface can be automated. Canvas-only or inaccessible controls can block a task.
@@ -258,7 +262,7 @@ Remove automatic startup:
 .\venv\Scripts\python.exe .\check_mvp_readiness.py --tests
 ```
 
-**Validation snapshot — 23 October 2026:** 141 automated tests passed. Coverage includes the agent loop, stale controls, recording, transcription, wake gating, contextual input, approvals, cancellation, media verification, shutdown cleanup, and mocked power actions. Account and power effects in these tests are simulated; passing them does not establish live account delivery or complete physical voice acceptance.
+**Validation snapshot — 23 October 2026:** 154 automated tests passed. Coverage includes the agent loop, stale controls, recording, transcription, wake gating, contextual input, approvals, cancellation, media verification, shutdown cleanup, and mocked power actions. Account and power effects in these tests are simulated; passing them does not establish live account delivery or complete physical voice acceptance.
 
 The readiness report is written to the ignored `logs/mvp_readiness.json`. It checks local configuration without account API calls or microphone recording.
 
@@ -291,7 +295,7 @@ This renders the eight character states without microphone or API usage. Images 
 | `audio_capture.py`, `stt_client.py`, `voice_cancel.py` | Recording, command transcription, and interruption |
 | `desktop_worker.py`, `app_tools.py` | Windows observation and app control |
 | `spotify_tools.py`, `spotify_worker.py` | Spotify search, playback, and verification |
-| `browser_tools.py`, `web_reader.py` | Browser opening, searches, and public text extraction |
+| `browser_tools.py`, `web_reader.py`, `research_tools.py` | Explicit browser opening, quiet search, public reading, prayer calculations, and research budgets |
 | `business_tools.py`, `power_tools.py` | Account workflows and confirmed power requests |
 | `memory.py`, `secret_store.py` | Persistent preferences, approvals, and encrypted credentials |
 | `startup_windows.py`, `launch_bilal.pyw` | Sign-in startup and silent launch |

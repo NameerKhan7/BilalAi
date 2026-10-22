@@ -31,13 +31,13 @@ The full application requires both a classifier candidate and local full-phrase 
 
 Playback that actually contains the complete “Hey Bilal” phrase can still activate this version. There is no speaker identification or playback echo cancellation. Disable wake listening temporarily while investigating, review false-activation examples from the tray, and run the background-playback acceptance sequence in [Testing](testing.md). Never label an automatic detection as correct without listening to it.
 
-## The companion stays visible after the answer
+## The companion or microphone stays active unexpectedly
 
-This is an active conversation, not necessarily a stuck request. After spoken output finishes, Bilal waits 15s for another utterance without a new wake phrase. Say “we are done” or “stop listening,” cancel, or let that no-speech window expire. A held shortcut keeps it visible. Captured follow-up speech goes to Groq/Gemini; keep background playback in mind. No new full-command capture should run during TTS or approval/input dialogs.
+Automatic follow-up listening is disabled by default. Release of a started hold capture should hide the companion immediately, with processing and the spoken answer continuing in the background. Ordinary wake/manual requests hide after reply completion. Busy or speaking avatar clicks are ignored. A waiting email/approval dialog is a separate interaction; an unresolved general question is answered explicitly with another hold-to-talk turn. Check that the updated instance is running before treating old 15s behavior as current.
 
 ## Global hold-to-talk does not behave as expected
 
-Use **left Ctrl + left Shift**, not the right-side modifiers. Hold to record and release either key to submit. Wait for the listening state before speaking. The shortcut is state polling, not interception; another app may also react to its modifiers. It cannot approve a pending action or submit the missing-detail box. If an existing task is processing, holding is not an immediate second queued request.
+Use **left Ctrl + left Shift**, not the right-side modifiers. Hold to record and release either key to submit. Wait for the listening state before speaking. The shortcut is state polling, not interception; another app may also react to its modifiers. It cannot approve a pending action or submit an email paste box. It can answer a spoken general clarification, such as city/country, while preserving the original task. If an existing task is processing, holding is not an immediate second queued request.
 
 A new hold capture suppresses silence/no-speech endpoints while held, but has a 600s chunk bound. An already running ordinary wake/manual capture keeps its original 90s maximum. Reaching a bound can begin processing while still held without hiding the companion.
 
@@ -81,7 +81,7 @@ If speech was interrupted, check whether a cancellation or another UI interactio
 
 ## The missing-detail box is waiting
 
-Enter or paste the requested detail and press **Enter** or **Continue**. The current input is single-line, limited to 2,000 characters. An email request requires a complete address; a person's name alone is insufficient. Cancel or Escape ends this pending continuation.
+For an email address, paste the requested detail and press **Enter** or **Continue**. For a general spoken question, hold left Ctrl + left Shift, say the answer, and release; no text popup is expected. The current input is single-line, limited to 2,000 characters. An email request requires a complete address; a person's name alone is insufficient. Cancel or Escape ends this pending continuation.
 
 Providing an address resumes draft preparation. It does not approve sending; the exact email must still be reviewed separately.
 
@@ -118,3 +118,20 @@ Use **Quit Bilal** or Ctrl+C during a console launch, then check whether the cur
 | `logs/mvp_readiness.json` | Local prerequisite checks and optional test result. |
 
 These can contain private requests, addresses, page content, and observations. Report only a redacted relevant excerpt plus date, Windows/app versions, exact reproduction steps, expected behavior, and observed result. Never include credentials or account token files.
+
+## Research takes too long or opens unrelated pages
+
+Factual questions should use quiet search/public reading or the prayer-time adapter, not open browser tabs unless asked. Search may be blocked; snippets or access/error pages do not verify a changing fact. Code limits each run to two searches, three reads, two browser openings, and two prayer lookups, with identical repeats blocked. Check private trace counters, per-step elapsed time, model rounds, provider HTTP status, and partial checkpoints to identify provider delay versus source failure.
+
+Prayer lookup requires confirmed city, country, date, and method; no GPS/IP location is inferred. If city is missing, answer the spoken clarification through hold-to-talk or “Hey Bilal” followed by the answer. Aladhan returns calculated starts, not the local mosque congregation schedule. Do not treat preferred-location memory as automatically saved unless its proposal was approved.
+
+## Summarize a task without rerunning it
+
+```powershell
+.\venv\Scripts\python.exe .\diagnose_task.py --latest
+.\venv\Scripts\python.exe .\diagnose_task.py --file "C:\path\to\agent_trace.json"
+```
+
+This reads a local saved trace only; it makes no provider calls and replays no actions. The default output summarizes model rounds, elapsed time, provider HTTP code, tool counts, repeats, unreadable pages, and per-step status/timing. Older traces may lack the newer timing fields. A 429 provider code indicates quota/rate limiting; an unreadable page is a source failure, not verified evidence.
+
+Add `--details` only for local investigation: it prints the private request, outcome, and tool arguments. Review and redact before sharing any output. Default output reduces content exposure but still includes filenames, timestamps, model names, and activity metadata.

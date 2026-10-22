@@ -68,9 +68,9 @@ The monitor retains 32 blocks of pre-candidate context and adds three blocks of 
 | `min_speech_rms` / `noise_multiplier` | 0.008 / 3.0 | Minimum speech level and noise-relative threshold. |
 | `onset_frames` | 3 | Consecutive speech-level blocks needed to begin a command. |
 
-A new hold-to-talk capture and follow-up capture override `max_seconds` to 600 and calibration to zero. Follow-up `initial_wait_seconds` is 15; hold mode starts with 10 but suppresses no-speech and silence endpoints while the keys remain held. Ordinary capture remains 90s/10s/4s. Release requests manual finish, and the 600s bound can process a chunk before release.
+New hold-to-talk and spoken-clarification captures override `max_seconds` to 600 and calibration to zero. Dormant internal follow-up mode uses a 15s initial wait, but default `AssistantWindow.conversation_enabled` is `False`; normal operation never automatically starts it. Hold/clarification mode starts with 10 but suppresses no-speech and silence endpoints while the keys remain held. Ordinary capture remains 90s/10s/4s. Release requests manual finish, and the 600s bound can process a chunk before release.
 
-`conversation.py` defines `FOLLOWUP_WAIT_SECONDS=15.0`, exact whole-utterance conversation endings, and visibility presence. `hold_to_talk.py` polls only Windows left Ctrl (`0xA2`) and left Shift (`0xA0`) states every 25ms; it does not intercept or record typed keys. The shortcut has no current user-facing remapping setting. Full-command capture waits until TTS ends and pauses during missing input/approvals.
+`conversation.py` defines `FOLLOWUP_WAIT_SECONDS=15.0`, exact whole-utterance conversation endings, and visibility presence. `hold_to_talk.py` polls only Windows left Ctrl (`0xA2`) and left Shift (`0xA0`) states every 25ms; it does not intercept or record typed keys. The shortcut has no current user-facing remapping setting. Hold release ends the session and hides the UI while processing/audio may continue. General `text` clarification can be recorded with hold-to-talk; an `email` field retains the paste dialog. Busy/speaking avatar clicks are ignored.
 
 Silence detection measures sound level; it does not understand whether a sentence is complete. The guided wake-example collector deliberately uses shorter capture limits than regular commands.
 
@@ -81,7 +81,7 @@ Silence detection measures sound level; it does not understand whether a sentenc
 | Agent run | Up to 12 rounds, 180-second deadline, 20-second provider HTTP timeout | `agent_core.py` |
 | Command transcription | 20-second provider timeout, one SDK retry, mono 16 kHz WAV up to 25 MiB | `stt_client.py` |
 | Desktop worker | Bounded 20-second bridge call | `agent_tools.py` |
-| Missing input | Single-line field, up to 2,000 characters; email field validates a complete address | `contextual_input.py` |
+| Missing input | Spoken hold-to-talk text clarification, or single-line email paste dialog; validated details up to 2,000 characters | `contextual_input.py` |
 | Power approval | Expires after 120 seconds | `power_tools.py` |
 | Companion | 96 × 120 px by default | `main.py` |
 | Tray controls | Wake listening and spoken replies can be toggled during use | `main.py`, `ui_controller.py` |
@@ -91,3 +91,9 @@ Silence detection measures sound level; it does not understand whether a sentenc
 ## Private runtime files
 
 Recordings, traces, learned preferences, approval state, account tokens, downloaded verifier weights, and candidate models are generated locally. Their locations and provider boundaries are described in [Data and security](data-and-security.md). Do not treat a token file's existence or a readiness status as proof of a live connection.
+
+## Research budgets and location
+
+`ResearchGuard` in `research_tools.py` permits per-run maxima of two quiet searches, three page reads, two browser openings, and two prayer lookups. Identical normalized tool/argument repeats are rejected. These are code limits, not `.env` options. Quiet Bing RSS search returns up to five leads. Research HTTP calls use 12s timeout, no redirects, and 256,000-byte response bound. Prayer calculation defaults to Aladhan method `1` (Karachi), with city, country, and ISO date required. No GPS/IP location detection or silent preferred-city saving is implemented. Confirmed memory and current context remain the available location sources.
+
+Prayer location resolution uses Nominatim structured city/country search with up to three candidates. Matches must have the requested country and a settlement type; matches separated by more than 0.1 degrees require clarification. Production requests are serialized with one-second spacing and a 64-entry in-memory LRU cache. Aladhan receives the resolved coordinates through `/timings/DD-MM-YYYY`; return coordinates must match within 0.02 degrees, date and method ID must match, and timezone/Fajr must be present. The cache does not persist a preferred city, use GPS/IP, or automatically save memory. OpenStreetMap attribution is included in returned location metadata. Research streaming also has a 25-second total deadline in addition to the 12-second request timeout.

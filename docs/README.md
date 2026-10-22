@@ -40,7 +40,7 @@ Use these terms consistently when discussing the project:
 - **Field acceptance:** a person checks the real microphone, speaker, Windows session, app, or account and records the outcome.
 - **Pending:** the required acceptance evidence is missing. Do not infer a pass from a mock or from a credential file existing.
 
-The latest recorded regression snapshot is **141 passing automated tests on 23 October 2026**. See [testing](testing.md) for its scope and wake replay evidence. Gmail and Notion live account acceptance remains pending; a connection inside Codex does not connect the standalone Bilal app.
+The latest recorded regression snapshot is **154 passing automated tests on 23 October 2026**. See [testing](testing.md) for its scope and wake replay evidence. Gmail and Notion live account acceptance remains pending; a connection inside Codex does not connect the standalone Bilal app.
 
 ## Historical and specialist references
 

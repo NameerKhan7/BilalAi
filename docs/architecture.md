@@ -60,19 +60,19 @@ Tools return evidence, errors, or pending work. A launch result with `verified: 
 6. The controller saves a local WAV and sends it to Groq. For wake-started requests, the final transcript must also contain “Hey Bilal”; otherwise agent execution is skipped. Typed/manual requests do not need that phrase.
 7. `RequestProcessor.handle()` creates an executor and calls `AgentBrain.run()`.
 8. The agent answers directly or performs the bounded observe–act–verify loop below.
-9. The controller saves the answer for recorded requests and signals the Qt UI. The companion speaks through Windows speech. After speech ends, the UI schedules follow-up capture while the conversation remains active; it hides after 15s without new speech or an explicit ending. Wake monitoring resumes once the conversation and request lifecycle allow it.
+9. The controller saves the answer for recorded requests and signals the Qt UI. The companion speaks through Windows speech. Automatic follow-up capture is disabled by default, so the UI hides after the reply. Hold release immediately hides/ends the session while processing and audio may continue. Wake monitoring resumes once the conversation and request lifecycle allow it.
 
 See [configuration](configuration.md) for the current audio and wake constants. The phrase verifier is context-biased: it receives `Hey Bilal.` as vocabulary context and additionally requires the full phrase, average log probability at least `-0.60`, and no-speech probability below `0.6`. It is neither speaker identification nor playback echo cancellation.
 
 ## Conversation presence and global hold-to-talk
 
-`conversation.py` separates session presence from model reasoning: `ConversationSession.active` keeps the companion present, while `held` keeps it visible even if the session has ended. `AssistantWindow` begins a session on wake, manual, typed, or hold interaction. A restartable Qt timer prevents reply/finished signals from opening duplicate captures.
+`AssistantWindow.conversation_enabled` defaults to `False`. The internal `ConversationSession` and 15s follow-up mode remain available to tests/explicit code configuration, but are not the default listening behavior. Each ordinary new voice turn requires wake, manual capture, or hold-to-talk.
 
-`HoldToTalk` polls only the left Ctrl/left Shift states through `GetAsyncKeyState` every 25ms and emits held/released transitions. It does not capture arbitrary keystrokes or consume them from other apps. On a permitted hold, the UI interrupts speech, sets a thread-safe hold event, and starts a capture if idle. Release requests capture finish. Missing-input/approval dialogs cannot be submitted or approved through this shortcut.
+`HoldToTalk` polls left Ctrl/left Shift state every 25ms without capturing typing. A permitted hold sets a thread-safe event and starts capture if idle. Release requests capture finish, ends the session, and hides the companion immediately. `hold_background` suppresses later task/reply popups for that held request while allowing processing and speech. Busy/speaking avatar clicks are ignored so an accidental click cannot reopen capture.
 
-`CommandEndpoint.feed(..., held=True)` suppresses silence and initial-no-speech endpoints but retains a maximum duration. A new hold capture uses 600s; existing ordinary wake/manual captures retain their original 90s bound. Follow-up capture uses a 15s initial wait and 600s total bound; after speech starts, 4s ending silence applies. A bounded chunk can process while the keys remain held, with presence retained.
+`CommandEndpoint.feed(..., held=True)` suppresses silence/no-speech endpoints but retains the duration bound. New hold and spoken-clarification captures use 600s; an existing ordinary wake/manual capture retains 90s. Reaching the bound can process a chunk before release. This does not enable unlimited continuous recording.
 
-After TTS has finished and the controller is idle, `continue_conversation()` starts the next follow-up capture. It does not run full-command capture during speech, approval, or missing input. No-speech timeout emits `conversation_timeout`; recognized whole-utterance endings emit `conversation_ended` before any agent tool run. Captured follow-up speech is a normal Groq/Gemini request without another wake phrase; silent waits are not uploaded.
+Email clarification and approvals remain manual dialogs and cannot be submitted through the shortcut. A general `text` clarification is spoken, leaves `pending_input` set, and permits explicit hold or verified wake capture in `clarification` mode. Its transcript is validated and wrapped with the pending question before resuming the original task. No automatic post-reply microphone opens.
 
 ## The agent loop
 
@@ -91,6 +91,14 @@ Default bounds are **12 rounds**, an overall **180-second budget**, and **20-sec
 
 A tool result with `outcome_uncertain` prevents subsequent mutations during that run. For example, a network timeout after creating a note must not silently create duplicates.
 
+## Quiet research and trace checkpoints
+
+`web_search` returns up to five Bing RSS leads without opening a browser; `read_webpage` retrieves usable source text. `prayer_times` resolves the explicitly supplied city/country through structured Nominatim search, then calls Aladhan’s date-specific coordinate endpoint (`/timings/DD-MM-YYYY`). The response must match resolved coordinates within 0.02 degrees, requested date and method ID, and contain timezone/Fajr data. It requires a confirmed city/country and reports calculation method; it does not discover the user’s location.
+
+`ResearchGuard` bounds each run independently of prompt compliance: two searches, three page reads, two browser openings, two prayer lookups, and no identical normalized repeats. Blocked/short error pages are rejected as evidence. A blocked source should end with an honest result/blocker rather than opening tabs indefinitely.
+
+Private task traces include model-round count, elapsed seconds, research counters, provider HTTP code when available, and each tool step’s elapsed milliseconds and round. Checkpoints preserve partial progress if a task stops. These observations support diagnosis; they do not imply the requested effect succeeded.
+
 ## Observe before acting
 
 The generic desktop worker keeps Windows accessibility handles in one process for a request. The agent receives opaque IDs instead of raw handles:
@@ -105,7 +113,7 @@ This architecture avoids guessing screen coordinates, but depends on application
 
 ## Clarification is a pause, not a new task
 
-The model calls `request_input(question, field)` when a detail is missing. The loop prioritizes that call before other calls in the same response and returns the question. The controller retains a pending input record and pauses wake activation. The UI opens a temporary email/text field.
+The model calls `request_input(question, field)` when a detail is missing. The loop prioritizes that call before other calls in the same response and returns the question. The controller retains a pending input record and blocks wake activation only for an email field. The UI opens a temporary field only for email. General text details are spoken and answered through hold-to-talk or verified wake activation; the pending question remains in the controller.
 
 On submission, local validation runs and the answer continues through the agent with previous task context. Completed tool progress is included when clarification follows earlier work. Pasting an email address never approves sending. Cancellation discards the pending input and records the cancellation in conversation context.
 
@@ -140,4 +148,8 @@ A SIGINT handler requests shutdown through an event; the Qt timer performs clean
 
 ## Current boundaries
 
-Implemented does not mean accepted in every environment. Live Gmail/Notion account acceptance, physical startup/power checks, and fresh background-video/voice testing remain separate acceptance work. The latest automated snapshot is 141 passing tests on 23 October 2026; it is not evidence of live delivery or universal app compatibility. Follow [testing](testing.md) and the [field acceptance guide](FIELD_ACCEPTANCE.md).
+Implemented does not mean accepted in every environment. Live Gmail/Notion account acceptance, physical startup/power checks, and fresh background-video/voice testing remain separate acceptance work. The latest automated snapshot is 154 passing tests on 23 October 2026; it is not evidence of live delivery or universal app compatibility. Follow [testing](testing.md) and the [field acceptance guide](FIELD_ACCEPTANCE.md).
+
+### Prayer location cross-check
+
+The earlier city-name API returned unrelated coordinates in a development check. The current adapter therefore geocodes independently before requesting calculated timings and rejects mismatched returned coordinates. Nominatim results must match the supplied country and a settlement type; widely separated matches require clarification. Normal runtime caches up to 64 city/country resolutions in RAM and serializes uncached requests with at least one second between requests. Returned location metadata includes OpenStreetMap attribution/source. These checks reduce mismatched-location results; they do not establish perfect source accuracy or the local mosque schedule.

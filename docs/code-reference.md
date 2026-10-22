@@ -19,9 +19,9 @@ Reviewed **23 October 2026**. Paths below are relative to the repository root. F
 | --- | --- | --- |
 | [`main.py`](../main.py) | `main()`, `AssistantWindow`, `CharacterStage`, `VoiceWave`, `managed_painter()` | Qt application, tray, tiny character/orb, speech, dialogs, animation, runtime status and graceful exit |
 | [`ui_controller.py`](../ui_controller.py) | `AssistantController`, `event` signal, `record()`, `send()`, `submit_input()`, `resolve_approval()`, `cancel_request()`, `close()` | Background task orchestration and lifecycle state |
-| [`conversation.py`](../conversation.py) | `ConversationSession`, `FOLLOWUP_WAIT_SECONDS`, `is_conversation_end()` | Session presence, 15s follow-up wait, and exact whole-utterance endings |
+| [`conversation.py`](../conversation.py) | `ConversationSession`, `FOLLOWUP_WAIT_SECONDS`, `is_conversation_end()` | Internal session presence and dormant 15s follow-up mode; default auto-listening disabled |
 | [`hold_to_talk.py`](../hold_to_talk.py) | `HoldToTalk`, `changed` signal, `poll()` | Global left Ctrl + left Shift state polling and held/released transitions; no typing log |
-| [`contextual_input.py`](../contextual_input.py) | `ContextInputDialog`, `validate_detail()` | Temporary missing-detail dialog and local validation |
+| [`contextual_input.py`](../contextual_input.py) | `ContextInputDialog`, `validate_detail()` | Email paste dialog and email/text detail validation; general text clarification is spoken |
 | [`launch_bilal.pyw`](../launch_bilal.pyw) | Launcher entry point | Hidden startup, output redirection and Qt logging |
 | [`startup_windows.py`](../startup_windows.py) | `shortcut_path()`, `configure()` | Install/remove and verify current-user startup shortcut |
 | [`runtime_paths.py`](../runtime_paths.py) | `worker_python()` | Locate the console interpreter for worker subprocesses |
@@ -48,7 +48,7 @@ The controller's main states are `idle`, `recording`, `transcribing`, `thinking`
 | Desktop discovery | `list_apps`, `list_windows`, `inspect_window` | Returns observed IDs and current accessible state |
 | Desktop action | `launch_app`, `activate_control`, `enter_text` | Usually unverified until a fresh observation |
 | Music | `spotify_play`, `media_status` | Dedicated playback operation and actual media readback |
-| Browser and web | `browser_search`, `open_site`, `open_url`, `read_webpage` | Opening differs from reading or finishing a task |
+| Browser and web | `web_search`, `prayer_times`, `browser_search`, `open_site`, `open_url`, `read_webpage` | Opening differs from reading or finishing a task |
 | Accounts | `gmail_create_draft`, `notion_search`, `notion_read`, `notion_create_note` | Gmail draft is unsent; Notion creation includes readback |
 | Proposals | `propose_memory`, `request_system_power` | Human confirmation required before saving/executing |
 
@@ -61,6 +61,7 @@ All declared parameters are strings; enums constrain selected fields. Dispatch r
 | [`desktop_worker.py`](../desktop_worker.py) | `DesktopSession`, `execute()`, `main()` | UI Automation discovery, control inspection, literal text entry, restricted invocation and media status |
 | [`app_tools.py`](../app_tools.py) | `open_app()`, `store_catalog()`, `AppLaunchError` | Older supported executable/Store launch helpers; `AppLaunchError` remains used by active error handling |
 | [`browser_tools.py`](../browser_tools.py) | `BrowserTools.open_url()`, `execute()`, `find_chrome()`, `search_url()` | Chrome discovery and opening supported searches/HTTP(S) pages |
+| [`research_tools.py`](../research_tools.py) | `web_search()`, `resolve_city()`, `cached_city()`, `prayer_times()`, `ResearchGuard` | Quiet Bing RSS research, independent Nominatim settlement resolution/cache, cross-checked Aladhan coordinate timings, and bounded repeat/budget policy |
 | [`web_reader.py`](../web_reader.py) | `read_webpage()`, `validate_url()` | Bounded public page text retrieval and destination validation |
 | [`spotify_tools.py`](../spotify_tools.py) | `play_spotify()` | Start and supervise the Spotify workflow subprocess |
 | [`spotify_worker.py`](../spotify_worker.py) | Worker entry point, `media_snapshot()`, `process_name()` | Spotify accessibility interaction and Windows media-session evidence |
@@ -81,6 +82,8 @@ All declared parameters are strings; enums constrain selected fields. Dispatch r
 | [`stt_client.py`](../stt_client.py) | `transcribe_recording()`, `TranscriptionError` | Groq command transcription with bounded requests and vocabulary context |
 | [`voice_cancel.py`](../voice_cancel.py) | `CancelListener`, `is_cancel_request()`, `strip_wake_prefix()` | Offline cancellation recognition and full-utterance cancellation handling |
 | [`setup_wake_verifier.py`](../setup_wake_verifier.py) | Installer CLI | Download pinned public verifier model and verify weight integrity |
+
+`AssistantController.clarification_request()` validates an answer, clears the pending question, and binds it to the existing task context. Hold release hides via `hold_background`; `avatar_clicked()` rejects busy/speaking clicks. Automatic follow-up mode is off unless explicitly enabled in code.
 
 Do not conflate the two Whisper uses: the wake verifier stays local; complete command transcription goes to Groq. The baseline classifier is `models/hey_bilal.onnx`; downloaded verifier files live separately in ignored `models/wake_asr/`.
 
@@ -106,6 +109,7 @@ Constructor injection (`state`, sessions, desktop bridge, Spotify player or powe
 | [`train_reviewed_wake.py`](../train_reviewed_wake.py) | Gate training on reviewed sessions, prepare private candidate inputs and optionally train |
 | [`training/train_personalized.py`](../training/train_personalized.py) | Candidate training with session-held-out evaluation |
 | [`calibrate_wakeword.py`](../calibrate_wakeword.py) | Diagnostic recording/scoring workflow |
+| [`diagnose_task.py`](../diagnose_task.py) | Read-only local trace summarizer; `--latest`, `--file PATH`, optional private `--details`; no task replay |
 | [`check_mvp_readiness.py`](../check_mvp_readiness.py) | Local readiness report and optional test run |
 | [`tests/`](../tests/) | Unit/contract tests and simulated integration scenarios |
 

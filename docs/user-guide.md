@@ -28,15 +28,15 @@ The trigger and request can be one utterance. Wake verification buffers incoming
 
 Continue while the character listens. **Four seconds of detected silence can end recording**, so longer thinking pauses can split a request. Ordinary wake/manual capture lasts up to 90 seconds and stops after the initial wait if no speech is detected. These limits are not a fixed delay for every reply.
 
-Bilal transcribes the recording, reasons, performs available steps, and speaks the result when **Speak replies** is enabled. After the reply finishes, it waits up to **15 seconds for new speech** without requiring another wake phrase. Once you begin a follow-up, four seconds of silence ends that utterance. Say **“we are done”**, **“goodbye Bilal”**, or **“stop listening”** to end the session; otherwise it hides after a silent timeout. A missing-detail or approval dialog stays visible until you respond, with follow-up capture paused.
+Bilal transcribes the recording, reasons, performs available steps, and speaks the result when **Speak replies** is enabled. The companion hides when the request and reply finish. Automatic follow-up listening is disabled by default. Use the wake phrase or hold-to-talk for another turn. A missing email-address or approval dialog stays visible until you respond.
 
 Only the full **“Hey Bilal”** phrase should activate it automatically. “Hey” alone is unsupported. A video actually saying the full phrase can still trigger this version: it does not identify your voice.
 
 ## 3. Hold to talk, record manually, or type
 
-Hold **left Ctrl + left Shift** from another app or the desktop, wait for the listening state, and speak. Release either key to submit. While held, a new hold capture does not stop for a thinking pause or an initial no-speech timeout. It has a 600-second chunk bound; processing that chunk can begin before release, while the companion stays visible. This is a bound, not unlimited dictation. The shortcut polls only modifier states and records no typed keys. Other apps still receive the modifiers, so their shortcuts may also react.
+Hold **left Ctrl + left Shift** from another app or the desktop, wait for the listening state, and speak. Release either key to submit and hide the companion immediately. Processing and the spoken answer can continue in the background; release does not cancel the task. While held, a new hold capture does not stop for a thinking pause or an initial no-speech timeout. It has a 600-second chunk bound; processing that chunk can begin before release, while the companion stays visible. This is a bound, not unlimited dictation. The shortcut polls only modifier states and records no typed keys. Other apps still receive the modifiers, so their shortcuts may also react.
 
-The shortcut never approves an action or submits a missing-detail dialog. Holding during spoken output interrupts speech before a new capture can start; it is not simultaneous recording of Bilal’s own reply. If work is already processing, the hold does not cancel its completed actions or guarantee a second immediate recording.
+The shortcut never approves an action or submits an email-address dialog. It can record an answer to a spoken general clarification while preserving the pending task. Holding during spoken output interrupts speech before a new capture can start; it is not simultaneous recording of Bilal’s own reply. If work is already processing, the hold does not cancel its completed actions or guarantee a second immediate recording.
 
 If automatic activation is unavailable:
 
@@ -46,7 +46,7 @@ If automatic activation is unavailable:
 
 For typed input, choose **Read reply / type a request**, enter the request, and send. This bypasses microphone recognition and helps distinguish a transcription problem from task execution.
 
-Click the visible companion to start/finish recording; drag to reposition it; right-click for controls. Space controls recording when the companion has focus and the request input does not. The separate left Ctrl + left Shift shortcut is global; Space remains a focused-window control.
+Click an idle visible companion to start recording; clicks during processing or speech are ignored. Use the tray recording control or hold-key release to finish capture; drag to reposition it; right-click for controls. Space controls recording when the companion has focus and the request input does not. The separate left Ctrl + left Shift shortcut is global; Space remains a focused-window control.
 
 ## 4. Read the character states
 
@@ -62,7 +62,7 @@ Click the visible companion to start/finish recording; drag to reposition it; ri
 | Error | The request needs attention or could not finish |
 | Inactive | Wake listening is disabled or pending work is stopping |
 
-During an active conversation, the listening state also means a follow-up can be spoken without “Hey Bilal.” Silent waits stay local, but any detected follow-up utterance is saved and sent to Groq, and its request is sent to Gemini. Background speech can be captured during this interval. No full-command microphone capture runs while Bilal speaks or waits for approval/input.
+Automatic full-command follow-up capture is off by default. The listening state should therefore represent an explicitly started recording. A busy or speaking avatar ignores clicks; it should not open another microphone capture.
 
 Hidden does not mean the process is off. Check **Listen for Hey Bilal** in the tray for the activation setting. The conversation view has more detail than the small character shows.
 
@@ -84,7 +84,7 @@ These examples are natural requests, not required sentences:
 
 Opening an app is only the first step of a larger task. Some apps expose too little accessible information for further work. Search results are not proof of music playback or completed research.
 
-Include an artist for music when possible. Bilal can interpret likely title mistakes from context, but correct it if it chooses the wrong track. For changing information such as tomorrow's weather, include city/date and ask for a current lookup; an unsupported conversational guess is not verified research.
+Include an artist for music when possible. Bilal can interpret likely title mistakes from context, but correct it if it chooses the wrong track. For changing information, include city/date and ask for a current lookup. Bilal uses quiet search and readable source text rather than opening tabs unless you explicitly ask. Blocked sources should produce a short blocker, not repeated searches. For prayer times, give city, country, and date; Bilal returns calculated prayer starts and the method, not a mosque congregation schedule. It does not infer your location through GPS/IP.
 
 ## 6. Supply missing details
 
@@ -96,7 +96,9 @@ You can dictate content before providing every field:
 4. Bilal continues using the content already given.
 5. Review the actual draft before approving or rejecting sending.
 
-Invalid input stays visible with a validation message. Correct it or cancel. Supported text fields accept up to 2,000 characters. Use this box for requested details, not passwords or API keys.
+For a general question such as “Which city and country?”, no text dialog appears: hold left Ctrl + left Shift, say the answer, and release, or say “Hey Bilal” followed by the answer. Bilal resumes the original task rather than treating the city as an unrelated request.
+
+Invalid email input stays visible with a validation message. Correct it or cancel. Supported text fields accept up to 2,000 characters. Use this box for requested details, not passwords or API keys.
 
 **Pasting an address is not sending approval.** Cancelling stops the pending continuation. After a restart, restate a request that was waiting for clarification; this input flow is not a durable task queue.
 

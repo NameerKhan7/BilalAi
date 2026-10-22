@@ -11,12 +11,12 @@ Bilal AI is a Windows LLM agent with local tools. Gemini chooses available tools
 | Area | Implemented behavior | Main boundary |
 | --- | --- | --- |
 | Activation | Local acoustic detector and offline full-phrase verification | No speaker identity or acoustic echo cancellation |
-| Recording | Silence-ended wake/manual capture or global left Ctrl + left Shift hold/release | Ordinary limit 90s; new hold/follow-up captures bounded 600s |
-| Conversation | Gemini answers/selects tools; follow-ups after reply need no new wake phrase | 15s no-speech timeout; detected follow-ups use cloud transcription/reasoning |
+| Recording | Silence-ended wake/manual capture or global left Ctrl + left Shift hold/release | Ordinary limit 90s; new hold/clarification captures bounded 600s |
+| Conversation | Gemini answers and selects tools; explicit activation for each new voice turn by default | Automatic follow-up capture is disabled |
 | Desktop | Discover apps/windows, inspect and operate accessible controls | Coverage depends on Windows accessibility support |
 | Music | Search Spotify, attempt playback, verify actual media status | Spotify must be installed and usable |
 | Web | Open Chrome searches/URLs; separately read public page text | No general DOM or screenshot-based browser agent |
-| Missing details | Ask a question and open a temporary input box | One address or non-secret text response at a time |
+| Missing details | Ask general questions aloud; receive hold-to-talk clarification; show email paste dialog | Original task retained in process; no sending approval implied |
 | Memory | Save approved preferences, aliases, and pronunciation corrections | No automatic model retraining or extra permissions |
 | Gmail | Create/read back a plain-text draft; review before sending | Separate account setup; no attachments; live tests pending |
 | Notion | Search/read shared pages; create/read back a requested note | Only integration-accessible pages; live tests pending |
@@ -56,11 +56,9 @@ Capture runs locally until detected silence, manual finish, cancellation, or a l
 
 Wake capture reuses the microphone stream and buffered audio without restarting calibration. The initial wait is not ten additional seconds after the popup appears. Timings are code defaults, not exposed user settings.
 
-A new hold capture starts through global **left Ctrl + left Shift**. Keeping the keys held suppresses silence/no-speech endpoints; release sends the captured utterance. New hold and follow-up captures have a 600-second chunk bound. Hitting the bound processes the chunk and does not hide the UI while held. Ordinary wake/manual capture retains the defaults above. The shortcut polls only left modifier states and does not log or intercept typing.
+A new hold capture starts through global **left Ctrl + left Shift**. Keeping the keys held suppresses silence/no-speech endpoints; release sends the captured utterance. New hold and clarification captures have a 600-second chunk bound. Hitting the bound processes the chunk and does not hide the UI while held. Ordinary wake/manual capture retains the defaults above. The shortcut polls only left modifier states and does not log or intercept typing.
 
-After a reply finishes, an active conversation waits 15s for a follow-up to start; speech then ends after 4s silence. No new wake phrase is needed. Full-command capture pauses during TTS, missing input, and approval. Explicit whole-utterance endings such as “we are done” or “stop listening” close the session.
-
-Activated/manual/hold and detected follow-up command audio goes to Groq. Silent follow-up waits are not uploaded. Audio, transcript, and answer files are saved under ignored `recordings/`. Typed requests bypass capture and transcription. Recognition can mishear names, mixed languages, quiet speech, and song titles; contextual interpretation does not guarantee the intended meaning.
+Releasing hold-to-talk hides the companion immediately and ends the active session, while the task and audio reply may continue in the background. There is no automatic recording after the reply in the default build. Existing internal 15s follow-up support is dormant unless explicitly enabled in code. Captured commands and spoken clarifications go to Groq. Audio, transcript, and answer files are saved under ignored `recordings/`. Typed requests bypass capture and transcription. Recognition can mishear names, mixed languages, quiet speech, and song titles; contextual interpretation does not guarantee the intended meaning.
 
 **Code:** [audio_capture.py](../audio_capture.py), [ui_controller.py](../ui_controller.py). **Tests:** [capture](../tests/test_audio_capture.py).
 
@@ -100,7 +98,9 @@ The adapter searches, attempts playback, and checks Windows media-session inform
 
 ## 6. Browser search and public reading
 
-Bilal can open Google, YouTube, or Wikipedia searches in Chrome and open HTTP(S) URLs. Opening results does not prove research or a page task finished.
+Factual research uses quiet `web_search` (Bing RSS, up to five results) and `read_webpage`. Search can be blocked; snippets are leads, not verified facts. `prayer_times` independently resolves a confirmed city/country through Nominatim/OpenStreetMap, then uses Aladhan’s coordinate endpoint for the ISO date with method 1 (Karachi) by default. Returned coordinates, date, method ID, timezone, and Fajr data are checked; returned times are calculated starts, not mosque congregation times. No automatic GPS/IP city lookup exists.
+
+`ResearchGuard` permits at most two searches, three page reads, two browser openings, and two prayer lookups per agent run, and rejects identical normalized repeats. Blocked or very short error pages cannot serve as source evidence. Bilal can explicitly open Google, YouTube, or Wikipedia searches in Chrome and open HTTP(S) URLs when requested. Opening results does not prove research or a page task finished.
 
 The public webpage reader returns bounded text, source URLs, and continuation support. It does not use browser login cookies, inspect screenshots, or read private/local-network resources. Signed-in content needs a connected service or supported desktop interaction. App/web content is untrusted observation, not authority to override the user's request or bypass approval.
 
@@ -108,9 +108,9 @@ The public webpage reader returns bounded text, source URLs, and continuation su
 
 ## 7. Contextual input
 
-When a detail is missing, `request_input` asks a short question and opens a small dialog. The existing task stays in the current conversation.
+When a detail is missing, `request_input` asks a short question. An `email` field opens the paste dialog; a `text` field is spoken with no dialog, and the user answers through hold-to-talk or a verified wake turn. The controller retains the pending task and wraps the transcribed answer as clarification context. The existing task stays in the current conversation.
 
-Supported fields are one complete email address or non-secret text. Input must be nonempty and at most 2,000 characters; the email field rejects incomplete/multiple addresses. Invalid input stays visible for correction. Enter/**Continue** submits once, closes the dialog, and resumes work. Cancel stops the pending continuation.
+Supported fields are one complete email address or non-secret text. Input must be nonempty and at most 2,000 characters; the email field rejects incomplete/multiple addresses. Invalid email input stays visible for correction. Enter/**Continue** submits the email dialog once, closes it, and resumes work. Spoken text answers use the held capture’s release and the same local validation. Cancel stops the pending continuation.
 
 Pasting a recipient does **not** approve sending. The box is not for passwords, API keys, or payment details. Pending clarification lives in the process; do not rely on it surviving a restart.
 
@@ -157,7 +157,7 @@ Shutdown/restart preserve Windows save-work handling without forcing application
 
 ## 12. Companion, speech, cancellation, and startup
 
-The transparent **96 × 120 pixel** character/orb appears near the bottom center and stays hidden before activation. After reply completion, it remains available during an active follow-up session, hiding on a 15s no-speech timeout or explicit end. Holding the shortcut keeps it visible. Missing-input/approval dialogs keep necessary interaction visible. The full conversation opens on demand.
+The transparent **96 × 120 pixel** character/orb appears near the bottom center and stays hidden before activation. After reply completion it hides. Hold release hides it immediately while processing/audio may continue. Automatic follow-up capture is disabled by default. Missing-input/approval dialogs keep necessary interaction visible. The full conversation opens on demand.
 
 The eight artwork states are idle, listening, processing, speaking, success, error, loading, and inactive. Qt animates supplied 2D artwork with pose transitions, gestures, blinks, and speech motion; it is not a 3D renderer. Speech uses an installed Windows voice and system output. Engine availability does not prove audible sound.
 
@@ -173,4 +173,4 @@ Wake verification stays local. Command recordings go to Groq. Requests, relevant
 
 Desktop failures can require fresh observation. Uncertain account writes require service inspection before retrying. Missing configuration is a connection requirement. Wake verification failures disable automatic activation rather than handing background speech to the agent.
 
-The **23 October 2026** regression run passed 141 automated tests; [testing](testing.md) records the scope and separate wake replay evidence. Simulated account/power effects and synthetic audio do not prove live delivery, physical recognition, or sign-in startup. Follow [field acceptance](FIELD_ACCEPTANCE.md) for those checks.
+The **23 October 2026** regression run passed 154 automated tests; [testing](testing.md) records the scope and separate wake replay evidence. Simulated account/power effects and synthetic audio do not prove live delivery, physical recognition, or sign-in startup. Follow [field acceptance](FIELD_ACCEPTANCE.md) for those checks.

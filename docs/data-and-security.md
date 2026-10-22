@@ -9,18 +9,21 @@ Reviewed **23 October 2026**. These are implemented controls and practical limit
 | Data | Destination | When |
 | --- | --- | --- |
 | Wake microphone buffers and candidate phrase verification | Local processing | While wake monitoring is enabled; verifier makes no provider request |
-| Full recorded command WAV, including follow-up utterances | Groq | After wake/manual/hold capture or detected speech in an active session; no new wake is required for follow-ups |
+| Full recorded command WAV, including spoken clarification answers | Groq | After explicit wake/manual/hold capture; automatic follow-up recording is disabled by default |
 | User request, recent conversation, confirmed preferences and relevant tool results | Gemini | During reasoning; observations can contain app, webpage or account text |
 | Gmail draft/send data | Gmail API | Only with Bilal's standalone Gmail connection |
 | Notion page queries/content/new note | Notion API | Only with Bilal's standalone integration and shared page access |
 | Public webpage URL/request | Target web server | During `read_webpage`; without browser login cookies |
-| Search text/URLs | Chrome and target websites | When a browser tool opens them |
+| Search query | Bing | Quiet RSS search; no Chrome window required |
+| Confirmed city/country | Nominatim / OpenStreetMap | Structured geocoding for requested prayer lookup; 64-entry RAM cache, no automatic preferred-city persistence |
+| Resolved coordinates/date/method | Aladhan | Requested prayer calculation, with response cross-checks; no GPS/IP discovery |
+| Search text/URLs | Chrome and target websites | When the user requests browser opening |
 
 The second trigger check happens after Groq transcription. A rejected final transcript is prevented from reaching the agent, but that command audio has already been uploaded to Groq. Rejected **local verifier candidates** do not get uploaded by the wake verifier.
 
-An active session waits up to15s for the next utterance after the reply ends. A silent wait is not saved/uploaded as a command, but detected background speech can become a follow-up and go to Groq/Gemini. End the conversation or cancel when it should stop listening. Full-command capture is paused during TTS and missing-input/approval interaction; the separate fixed-grammar cancellation recognizer may run during processing.
+Automatic post-reply recording is off by default. General clarification answers are explicitly recorded through hold-to-talk or verified wake activation and go to Groq, then Gemini with the existing task context. Email addresses still use the paste dialog. Release hides the companion immediately but does not cancel processing or spoken output; hidden does not always mean the task has finished. The separate fixed-grammar cancellation recognizer may run during processing.
 
-The global hold shortcut polls only the Windows left Ctrl and left Shift states every 25ms. It has no typed-key log, does not intercept arbitrary keypresses, and does not consume the modifiers from other applications. Holding cannot approve an action or submit a detail dialog. New held captures are bounded at 600s per chunk rather than unlimited.
+The global hold shortcut polls only the Windows left Ctrl and left Shift states every 25ms. It has no typed-key log, does not intercept arbitrary keypresses, and does not consume the modifiers from other applications. Holding cannot approve an action or submit an email-address dialog; it can explicitly record an answer to a pending spoken text clarification. New held captures are bounded at 600s per chunk rather than unlimited.
 
 There is no fully offline reasoning fallback. Provider retention/billing rules are separate from this application's local controls.
 
