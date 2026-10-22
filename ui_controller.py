@@ -12,6 +12,7 @@ from voice_cancel import CancelListener,is_cancel_request,strip_wake_prefix
 from wake_verifier import command_after_wake
 from memory import LocalState
 from business_tools import BusinessWorkflows
+from conversation import FOLLOWUP_WAIT_SECONDS,is_conversation_end
 ROOT=Path(__file__).resolve().parent
 
 class AssistantController(QObject):
@@ -21,6 +22,7 @@ class AssistantController(QObject):
         self.cancel=threading.Event();self.stop_capture=threading.Event();self.state_store=state or LocalState(recover_inflight=enable_wake)
         self.brain=AgentBrain(state=self.state_store);self.business=BusinessWorkflows(self.state_store)
         self.reviewed_action=None;self.learning_process=None;self.pending_input=None
+        self.conversation_active=False;self.hold_event=threading.Event();self.capture_mode='manual'
         self.cancel_listener=CancelListener(self.cancel_request) if (enable_wake if enable_cancel is None else enable_cancel) else None
         self.processor=RequestProcessor(self.brain,on_progress=lambda text:self.emit('progress',text))
         self.wake_enabled=enable_wake
@@ -28,13 +30,14 @@ class AssistantController(QObject):
         if self.monitor: self.monitor.resume()
     def wake_event(self,name,data):
         if name!='wake':self.emit(name,data);return
-        if self.closed or not self.wake_enabled or self.state!='idle' or self.pending_input:return
+        if self.closed or not self.wake_enabled or self.state!='idle' or self.pending_input or self.conversation_active:return
         if not isinstance(data,dict) or data.get('phrase_verified') is not True:return
         self.state='recording';self.cancel=threading.Event();self.stop_capture=threading.Event()
         self.emit('wake_activated',{'sample_id':data.get('sample_id')})
         try:
+            self.capture_mode='wake'
             result=capture_command(CaptureConfig(calibration_seconds=0),stop_event=self.stop_capture,
-                on_event=self.emit,stream=data['stream'],leading_audio=data.get('leading_audio'))
+                on_event=self.emit,stream=data['stream'],leading_audio=data.get('leading_audio'),hold_event=self.hold_event)
             threading.Thread(target=self._captured,args=(result,True),daemon=True).start()
         except Exception:
             self.state='idle';self.emit('error','Wake capture failed. Try starting from the tray.');self.emit('finished',None)
@@ -54,31 +57,35 @@ class AssistantController(QObject):
         self.wake_enabled=enabled
         if enabled and self.monitor is None: self.monitor=WakeMonitor(self.wake_event)
         if self.monitor:
-            if enabled and self.state=='idle' and not self.pending_input: self.monitor.resume()
+            if enabled and self.state=='idle' and not self.pending_input and not self.conversation_active: self.monitor.resume()
             else: self.monitor.pause()
-    def record(self,from_wake=False):
+    def record(self,from_wake=False,mode='manual'):
         if self.state!='idle' or self.pending_input: return
         self.state='recording';self.cancel=threading.Event();self.stop_capture=threading.Event()
+        self.capture_mode=mode
         self.emit('preparing',None)
-        threading.Thread(target=self._record,args=(from_wake,),daemon=True).start()
-    def _record(self,from_wake):
+        threading.Thread(target=self._record,args=(from_wake,mode),daemon=True).start()
+    def _record(self,from_wake,mode='manual'):
         try:
             if self.monitor: self.monitor.pause()
-            config=CaptureConfig(calibration_seconds=0 if from_wake else .30)
-            result=capture_command(config,stop_event=self.stop_capture,on_event=self.emit)
-            self._process_capture(result,require_wake=from_wake)
+            config=CaptureConfig(calibration_seconds=0 if from_wake or mode in {'hold','followup'} else .30,
+                initial_wait_seconds=FOLLOWUP_WAIT_SECONDS if mode=='followup' else 10.,max_seconds=600. if mode in {'hold','followup'} else 90.)
+            result=capture_command(config,stop_event=self.stop_capture,on_event=self.emit,hold_event=self.hold_event)
+            self._process_capture(result,require_wake=from_wake,mode=mode)
         except RequestCancelled: self.emit('cancelled',None)
         except (TranscriptionError,AgentError) as exc:self.emit('cancelled' if self.cancel.is_set() else 'error',None if self.cancel.is_set() else str(exc))
         except Exception: self.emit('error','The request could not finish. Your saved recording is kept locally.')
         finally:
             if self.cancel_listener:self.cancel_listener.stop()
             self.state='idle';self.emit('finished',None)
-    def _process_capture(self,result,require_wake=False):
+    def _process_capture(self,result,require_wake=False,mode='manual'):
         if self.cancel.is_set(): raise RequestCancelled()
         if not result.speech_detected:
+            if mode=='followup' and result.reason=='no_speech':self.emit('conversation_timeout',None);return
+            if mode in {'hold','followup'}:self.emit('conversation_wait',None);return
             self.emit('empty','I didn’t hear a command. Try again when you’re ready.');return
         path=save_recording(result,ROOT/'recordings'/f'command_{uuid.uuid4().hex[:8]}.wav')
-        if result.reason=='max_length': self.emit('limit','Reached the 90-second recording limit.')
+        if result.reason=='max_length': self.emit('limit','Reached the recording limit. Processing this part now.')
         self.state='transcribing';self.emit('transcribing',None)
         if self.cancel_listener:self.cancel_listener.start()
         text=transcribe_recording(path)
@@ -109,7 +116,10 @@ class AssistantController(QObject):
     def _agent(self,text,path=None):
         text=strip_wake_prefix(text)
         if not text:
-            self.emit('empty','Ready when you have a command.');return
+            self.emit('reply',{'text':"I'm here. What are we working on?",'verified':False});return
+        if is_conversation_end(text):
+            self.emit('conversation_ended',None)
+            self.emit('reply',{'text':"All right. I'll be here when you need me.",'verified':False});return
         if is_cancel_request(text):
             self.cancel_request();self.emit('cancelled',None);return
         if self.cancel_listener:self.cancel_listener.start()
@@ -180,7 +190,7 @@ class AssistantController(QObject):
                 self.state='idle';self.emit('finished',None)
         threading.Thread(target=work,daemon=True).start()
     def resume_wake(self):
-        if not self.closed and self.monitor and self.wake_enabled and self.state=='idle' and not self.pending_input: self.monitor.resume()
+        if not self.closed and self.monitor and self.wake_enabled and self.state=='idle' and not self.pending_input and not self.conversation_active: self.monitor.resume()
     def close(self):
         self.closed=True;self.cancel_request(reject_approval=False)
         if self.cancel_listener:self.cancel_listener.stop()

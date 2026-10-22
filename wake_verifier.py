@@ -4,9 +4,19 @@ from concurrent.futures import Future
 from pathlib import Path
 import numpy as np
 MODEL_DIRECTORY=Path(__file__).resolve().parent/'models/wake_asr'
-MIN_KEYWORD_LOGPROB=-.49
+MIN_KEYWORD_LOGPROB=-.60
 WAKE_CONTEXT='Hey Bilal.'
 WAKE_PHRASE=re.compile(r'\bhey[\s,]+bilal\b[\s,.!?;:]*',re.I)
+
+
+def verification_audio(audio):
+    """Keep short speech context instead of letting long silent pre-roll bias decoding."""
+    audio=np.asarray(audio,dtype=np.int16).reshape(-1)
+    block=320
+    voiced=[offset for offset in range(0,len(audio),block)
+        if np.sqrt(np.mean((audio[offset:offset+block].astype(np.float32)/32768.)**2))>=.008]
+    if not voiced:return audio
+    return audio[max(0,voiced[0]-2560):min(len(audio),voiced[-1]+block+2560)]
 
 
 def command_after_wake(text):
@@ -28,6 +38,7 @@ class OfflineWakeVerifier:
             self.start()
             audio=np.asarray(audio,dtype=np.int16).reshape(-1)
             if not 1600<=len(audio)<=16000*6:return {'accepted':False}
+            audio=verification_audio(audio)
             segments,_=self.model.transcribe(audio.astype(np.float32)/32768.,language='en',beam_size=1,best_of=1,
                 temperature=0,condition_on_previous_text=False,vad_filter=False,initial_prompt=WAKE_CONTEXT,max_new_tokens=32)
             rows=list(segments)

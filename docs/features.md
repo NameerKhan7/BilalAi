@@ -11,8 +11,8 @@ Bilal AI is a Windows LLM agent with local tools. Gemini chooses available tools
 | Area | Implemented behavior | Main boundary |
 | --- | --- | --- |
 | Activation | Local acoustic detector and offline full-phrase verification | No speaker identity or acoustic echo cancellation |
-| Recording | Automatic endpoint detection with a four-second pause allowance | Long pauses end capture; 90-second maximum |
-| Conversation | Gemini answers questions and selects tools | Network, valid credentials, and provider quota required |
+| Recording | Silence-ended wake/manual capture or global left Ctrl + left Shift hold/release | Ordinary limit 90s; new hold/follow-up captures bounded 600s |
+| Conversation | Gemini answers/selects tools; follow-ups after reply need no new wake phrase | 15s no-speech timeout; detected follow-ups use cloud transcription/reasoning |
 | Desktop | Discover apps/windows, inspect and operate accessible controls | Coverage depends on Windows accessibility support |
 | Music | Search Spotify, attempt playback, verify actual media status | Spotify must be installed and usable |
 | Web | Open Chrome searches/URLs; separately read public page text | No general DOM or screenshot-based browser agent |
@@ -27,7 +27,7 @@ Bilal AI is a Windows LLM agent with local tools. Gemini chooses available tools
 
 The supported trigger is **“Hey Bilal”**, not “hey” alone. Automatic activation follows these gates:
 
-1. A local ONNX classifier identifies a possible wake phrase.
+1. A local ONNX classifier identifies a possible wake phrase using the live `candidate_threshold` of 0.30 and two-frame confirmation. The standalone diagnostic retains `threshold` 0.80.
 2. An offline speech verifier checks the complete phrase before the companion appears.
 3. Audio arriving during verification stays buffered for command capture.
 4. Groq transcribes the activated recording. The automatic command must still contain the trigger; otherwise the controller discards it before agent execution.
@@ -56,11 +56,17 @@ Capture runs locally until detected silence, manual finish, cancellation, or a l
 
 Wake capture reuses the microphone stream and buffered audio without restarting calibration. The initial wait is not ten additional seconds after the popup appears. Timings are code defaults, not exposed user settings.
 
-Activated/manual command audio goes to Groq. Audio, transcript, and answer files are saved under ignored `recordings/`. Typed requests bypass capture and transcription. Recognition can mishear names, mixed languages, quiet speech, and song titles; contextual interpretation does not guarantee the intended meaning.
+A new hold capture starts through global **left Ctrl + left Shift**. Keeping the keys held suppresses silence/no-speech endpoints; release sends the captured utterance. New hold and follow-up captures have a 600-second chunk bound. Hitting the bound processes the chunk and does not hide the UI while held. Ordinary wake/manual capture retains the defaults above. The shortcut polls only left modifier states and does not log or intercept typing.
+
+After a reply finishes, an active conversation waits 15s for a follow-up to start; speech then ends after 4s silence. No new wake phrase is needed. Full-command capture pauses during TTS, missing input, and approval. Explicit whole-utterance endings such as “we are done” or “stop listening” close the session.
+
+Activated/manual/hold and detected follow-up command audio goes to Groq. Silent follow-up waits are not uploaded. Audio, transcript, and answer files are saved under ignored `recordings/`. Typed requests bypass capture and transcription. Recognition can mishear names, mixed languages, quiet speech, and song titles; contextual interpretation does not guarantee the intended meaning.
 
 **Code:** [audio_capture.py](../audio_capture.py), [ui_controller.py](../ui_controller.py). **Tests:** [capture](../tests/test_audio_capture.py).
 
 ## 3. Reasoning and tool execution
+
+Assistant commentary and clarification use English. The active prompt encourages concise relevant follow-up questions and light situational humor without jokes during sensitive approvals/errors. This is model guidance, not a guarantee of perfect language or judgment.
 
 The flow is **understand → observe → act → observe again → reply or ask**. A question can receive a direct answer; an action request can invoke several tools and inspect their results.
 
@@ -151,7 +157,7 @@ Shutdown/restart preserve Windows save-work handling without forcing application
 
 ## 12. Companion, speech, cancellation, and startup
 
-The transparent **96 × 120 pixel** character/orb appears near the bottom center and hides before activation and after task/reply completion. Missing-input/approval dialogs keep necessary interaction visible. The full conversation opens on demand.
+The transparent **96 × 120 pixel** character/orb appears near the bottom center and stays hidden before activation. After reply completion, it remains available during an active follow-up session, hiding on a 15s no-speech timeout or explicit end. Holding the shortcut keeps it visible. Missing-input/approval dialogs keep necessary interaction visible. The full conversation opens on demand.
 
 The eight artwork states are idle, listening, processing, speaking, success, error, loading, and inactive. Qt animates supplied 2D artwork with pose transitions, gestures, blinks, and speech motion; it is not a 3D renderer. Speech uses an installed Windows voice and system output. Engine availability does not prove audible sound.
 
@@ -167,4 +173,4 @@ Wake verification stays local. Command recordings go to Groq. Requests, relevant
 
 Desktop failures can require fresh observation. Uncertain account writes require service inspection before retrying. Missing configuration is a connection requirement. Wake verification failures disable automatic activation rather than handing background speech to the agent.
 
-The README's **21 October 2026** snapshot reports 123 automated tests passing. This is historical evidence, not a new run by this document. Simulated account/power effects and synthetic audio do not prove live delivery, physical recognition, or sign-in startup. Follow [field acceptance](FIELD_ACCEPTANCE.md) for those checks.
+The **23 October 2026** regression run passed 141 automated tests; [testing](testing.md) records the scope and separate wake replay evidence. Simulated account/power effects and synthetic audio do not prove live delivery, physical recognition, or sign-in startup. Follow [field acceptance](FIELD_ACCEPTANCE.md) for those checks.

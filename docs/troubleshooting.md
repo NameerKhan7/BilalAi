@@ -31,11 +31,21 @@ The full application requires both a classifier candidate and local full-phrase 
 
 Playback that actually contains the complete “Hey Bilal” phrase can still activate this version. There is no speaker identification or playback echo cancellation. Disable wake listening temporarily while investigating, review false-activation examples from the tray, and run the background-playback acceptance sequence in [Testing](testing.md). Never label an automatic detection as correct without listening to it.
 
+## The companion stays visible after the answer
+
+This is an active conversation, not necessarily a stuck request. After spoken output finishes, Bilal waits 15s for another utterance without a new wake phrase. Say “we are done” or “stop listening,” cancel, or let that no-speech window expire. A held shortcut keeps it visible. Captured follow-up speech goes to Groq/Gemini; keep background playback in mind. No new full-command capture should run during TTS or approval/input dialogs.
+
+## Global hold-to-talk does not behave as expected
+
+Use **left Ctrl + left Shift**, not the right-side modifiers. Hold to record and release either key to submit. Wait for the listening state before speaking. The shortcut is state polling, not interception; another app may also react to its modifiers. It cannot approve a pending action or submit the missing-detail box. If an existing task is processing, holding is not an immediate second queued request.
+
+A new hold capture suppresses silence/no-speech endpoints while held, but has a 600s chunk bound. An already running ordinary wake/manual capture keeps its original 90s maximum. Reaching a bound can begin processing while still held without hiding the companion.
+
 ## Recording stops during a thinking pause
 
 The current endpoint ends capture after **four seconds of silence** following speech; it cannot infer whether you intended to continue. It waits up to ten seconds for initial speech and caps a command at ninety seconds. A three-second pause should normally fit, but low microphone level can make quiet speech resemble silence.
 
-Check distance/input level and the saved transcript before assuming the model ignored words. Recording defaults are in [Configuration](configuration.md). There is no current hold-two-keys recording mode.
+Check distance/input level and the saved transcript before assuming the model ignored words. Recording defaults are in [Configuration](configuration.md). For a longer pause, use global **left Ctrl + left Shift** hold-to-talk and release to submit. Its held endpoint suppresses the ordinary silence stop; maximum capture bounds still apply.
 
 ## Transcription gets an app or song name wrong
 

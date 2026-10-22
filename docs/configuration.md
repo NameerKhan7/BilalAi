@@ -24,11 +24,12 @@ Groq's model is currently the `DEFAULT_MODEL` constant in `stt_client.py`: `whis
 
 | `wakeword` field | Current value | Runtime meaning |
 | --- | --- | --- |
-| `threshold` | `0.8` | Minimum temporal classifier score for a candidate. |
+| `threshold` | `0.8` | Standalone classifier diagnostic/evaluation threshold. |
+| `candidate_threshold` | `0.3` | Live monitor threshold before offline full-phrase verification; falls back to `threshold` if absent. |
 | `consecutive_frames` | `2` | Consecutive 80 ms frames needed by the gate. |
 | `cooldown_seconds` | `0.6` | Minimum repeat interval, combined with rearming after low scores. |
 
-The GUI's `WakeMonitor` directly consumes those three fields. Other entries such as `phrase`, `model_path`, `sample_rate`, `chunk_samples`, `status`, `microphone_latency`, and `warmup_silence_seconds` describe intended settings or provenance but are **not all dynamically wired into the GUI monitor**. In current code the stream is fixed at 16 kHz mono int16, 1,280 samples per block, and low latency; `load_detector()` defaults to `models/hey_bilal.onnx`. Editing `phrase` does not train or change the wake phrase.
+The GUI's `WakeMonitor` directly consumes `candidate_threshold` (falling back to `threshold`), `consecutive_frames`, and `cooldown_seconds`. Other entries such as `phrase`, `model_path`, `sample_rate`, `chunk_samples`, `status`, `microphone_latency`, and `warmup_silence_seconds` describe intended settings or provenance but are **not all dynamically wired into the GUI monitor**. In current code the stream is fixed at 16 kHz mono int16, 1,280 samples per block, and low latency; `load_detector()` defaults to `models/hey_bilal.onnx`. Editing `phrase` does not train or change the wake phrase.
 
 Lowering a threshold can increase both sensitivity and false activation. Evaluate reviewed positive and negative recordings before changing policy; do not tune against a single successful utterance.
 
@@ -41,12 +42,14 @@ These are constants and decoder arguments in [`wake_verifier.py`](../wake_verifi
 | Model location | `models/wake_asr/` |
 | Model / execution | Whisper base.en, CPU int8, two CPU threads, one worker, local files only |
 | Vocabulary context | `Hey Bilal.` |
-| Minimum segment average log probability | `-0.49` |
+| Minimum segment average log probability | `-0.60` |
 | Maximum no-speech probability | Strictly below `0.6` |
 | Decoder | English, beam size 1, temperature 0, no previous-text conditioning, no VAD filter |
 | Accepted check-audio duration | 0.1–6 seconds |
 
 The complete phrase must also be recognized; context alone is insufficient. Phrase matching searches the first 200 transcript characters so captured pre-roll is permitted. This is a context-biased recognition check, not speaker identification. A video containing the full trigger can still activate the assistant.
+
+Before decoding, the verifier trims long silent margins using 20ms RMS blocks, retaining 160ms around the detected sound. This normalizes verification context without trimming the buffered command capture. The confidence cutoff was recalibrated to -0.60 against local replay; phrase and no-speech checks still apply.
 
 The monitor retains 32 blocks of pre-candidate context and adds three blocks of lookahead before verification. Buffered command audio is bounded; excessively slow checks are rejected. See [Architecture](architecture.md) for the activation sequence.
 
@@ -64,6 +67,10 @@ The monitor retains 32 blocks of pre-candidate context and adds three blocks of 
 | `max_seconds` | 90.0 | Total capture limit. |
 | `min_speech_rms` / `noise_multiplier` | 0.008 / 3.0 | Minimum speech level and noise-relative threshold. |
 | `onset_frames` | 3 | Consecutive speech-level blocks needed to begin a command. |
+
+A new hold-to-talk capture and follow-up capture override `max_seconds` to 600 and calibration to zero. Follow-up `initial_wait_seconds` is 15; hold mode starts with 10 but suppresses no-speech and silence endpoints while the keys remain held. Ordinary capture remains 90s/10s/4s. Release requests manual finish, and the 600s bound can process a chunk before release.
+
+`conversation.py` defines `FOLLOWUP_WAIT_SECONDS=15.0`, exact whole-utterance conversation endings, and visibility presence. `hold_to_talk.py` polls only Windows left Ctrl (`0xA2`) and left Shift (`0xA0`) states every 25ms; it does not intercept or record typed keys. The shortcut has no current user-facing remapping setting. Full-command capture waits until TTS ends and pauses during missing input/approvals.
 
 Silence detection measures sound level; it does not understand whether a sentence is complete. The guided wake-example collector deliberately uses shorter capture limits than regular commands.
 

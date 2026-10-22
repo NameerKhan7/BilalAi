@@ -2,7 +2,7 @@
 
 This is the guide to using, understanding, and developing Bilal AI. The source code is the implementation; these pages explain its behavior and the reasons behind it.
 
-Reviewed against the repository on **22 October 2026**. Bilal is experimental. A feature being implemented does not mean it has passed real microphone, Windows sign-in, or connected-account acceptance tests.
+Reviewed against the repository on **23 October 2026**. Bilal is experimental. A feature being implemented does not mean it has passed real microphone, Windows sign-in, or connected-account acceptance tests.
 
 ## Start here
 
@@ -40,7 +40,7 @@ Use these terms consistently when discussing the project:
 - **Field acceptance:** a person checks the real microphone, speaker, Windows session, app, or account and records the outcome.
 - **Pending:** the required acceptance evidence is missing. Do not infer a pass from a mock or from a credential file existing.
 
-The previous recorded regression snapshot is **123 passing automated tests on 21 October 2026**. This documentation update does not constitute another application test run. Gmail and Notion live account acceptance remains pending; a connection inside Codex does not connect the standalone Bilal app.
+The latest recorded regression snapshot is **141 passing automated tests on 23 October 2026**. See [testing](testing.md) for its scope and wake replay evidence. Gmail and Notion live account acceptance remains pending; a connection inside Codex does not connect the standalone Bilal app.
 
 ## Historical and specialist references
 

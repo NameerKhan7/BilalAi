@@ -2,7 +2,7 @@
 
 [Documentation](README.md) · [Project overview](../README.md) · [Feature reference](features.md) · [Field acceptance](FIELD_ACCEPTANCE.md)
 
-Bilal is an experimental Windows voice agent. Ordinary use is hands-free: say **“Hey Bilal”**, give the request, and listen to the answer. It can act through its implemented tools and the interfaces available on your PC. Gmail and Notion need separate setup; their live acceptance tests remain pending.
+Bilal is an experimental Windows voice agent. Ordinary use is hands-free: say **“Hey Bilal”**, give the request, and listen to the answer. You can also hold **left Ctrl + left Shift** globally to speak and release either key to submit. It can act through its implemented tools and the interfaces available on your PC. Gmail and Notion need separate setup; their live acceptance tests remain pending.
 
 The interface, assistant replies, spoken responses, and clarification prompts use **English**, including when you speak another language. Names, addresses, and dictated document/email content are preserved; explicitly requested non-English document content is separate from the interface language.
 
@@ -26,13 +26,17 @@ Say a complete request:
 
 The trigger and request can be one utterance. Wake verification buffers incoming audio, so a short delay before the character appears is possible. Avoid immediately repeating several times; the first request may still be verifying.
 
-Continue while the character listens. **Four seconds of detected silence can end recording**, so longer thinking pauses can split a request. Capture lasts up to 90 seconds and stops after the initial wait if no speech is detected. These limits are not a fixed delay for every reply.
+Continue while the character listens. **Four seconds of detected silence can end recording**, so longer thinking pauses can split a request. Ordinary wake/manual capture lasts up to 90 seconds and stops after the initial wait if no speech is detected. These limits are not a fixed delay for every reply.
 
-Bilal transcribes the recording, reasons, performs available steps, and speaks the result when **Speak replies** is enabled. It hides after completion. A missing-detail or approval dialog stays visible until you respond.
+Bilal transcribes the recording, reasons, performs available steps, and speaks the result when **Speak replies** is enabled. After the reply finishes, it waits up to **15 seconds for new speech** without requiring another wake phrase. Once you begin a follow-up, four seconds of silence ends that utterance. Say **“we are done”**, **“goodbye Bilal”**, or **“stop listening”** to end the session; otherwise it hides after a silent timeout. A missing-detail or approval dialog stays visible until you respond, with follow-up capture paused.
 
 Only the full **“Hey Bilal”** phrase should activate it automatically. “Hey” alone is unsupported. A video actually saying the full phrase can still trigger this version: it does not identify your voice.
 
-## 3. Record manually or type
+## 3. Hold to talk, record manually, or type
+
+Hold **left Ctrl + left Shift** from another app or the desktop, wait for the listening state, and speak. Release either key to submit. While held, a new hold capture does not stop for a thinking pause or an initial no-speech timeout. It has a 600-second chunk bound; processing that chunk can begin before release, while the companion stays visible. This is a bound, not unlimited dictation. The shortcut polls only modifier states and records no typed keys. Other apps still receive the modifiers, so their shortcuts may also react.
+
+The shortcut never approves an action or submits a missing-detail dialog. Holding during spoken output interrupts speech before a new capture can start; it is not simultaneous recording of Bilal’s own reply. If work is already processing, the hold does not cancel its completed actions or guarantee a second immediate recording.
 
 If automatic activation is unavailable:
 
@@ -42,7 +46,7 @@ If automatic activation is unavailable:
 
 For typed input, choose **Read reply / type a request**, enter the request, and send. This bypasses microphone recognition and helps distinguish a transcription problem from task execution.
 
-Click the visible companion to start/finish recording; drag to reposition it; right-click for controls. Space controls recording when the companion has focus and the request input does not. This is not a global push-to-talk shortcut.
+Click the visible companion to start/finish recording; drag to reposition it; right-click for controls. Space controls recording when the companion has focus and the request input does not. The separate left Ctrl + left Shift shortcut is global; Space remains a focused-window control.
 
 ## 4. Read the character states
 
@@ -57,6 +61,8 @@ Click the visible companion to start/finish recording; drag to reposition it; ri
 | Success | Tool verification supported completion |
 | Error | The request needs attention or could not finish |
 | Inactive | Wake listening is disabled or pending work is stopping |
+
+During an active conversation, the listening state also means a follow-up can be spoken without “Hey Bilal.” Silent waits stay local, but any detected follow-up utterance is saved and sent to Groq, and its request is sent to Gemini. Background speech can be captured during this interval. No full-command microphone capture runs while Bilal speaks or waits for approval/input.
 
 Hidden does not mean the process is off. Check **Listen for Hey Bilal** in the tray for the activation setting. The conversation view has more detail than the small character shows.
 

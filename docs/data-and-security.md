@@ -2,14 +2,14 @@
 
 [Documentation home](README.md) · [Architecture](architecture.md) · [Configuration](configuration.md)
 
-Reviewed **22 October 2026**. These are implemented controls and practical limits, not a security audit or guarantee against every malicious application/page.
+Reviewed **23 October 2026**. These are implemented controls and practical limits, not a security audit or guarantee against every malicious application/page.
 
 ## What leaves the computer?
 
 | Data | Destination | When |
 | --- | --- | --- |
 | Wake microphone buffers and candidate phrase verification | Local processing | While wake monitoring is enabled; verifier makes no provider request |
-| Full recorded command WAV | Groq | After manual recording or accepted wake activation and speech capture |
+| Full recorded command WAV, including follow-up utterances | Groq | After wake/manual/hold capture or detected speech in an active session; no new wake is required for follow-ups |
 | User request, recent conversation, confirmed preferences and relevant tool results | Gemini | During reasoning; observations can contain app, webpage or account text |
 | Gmail draft/send data | Gmail API | Only with Bilal's standalone Gmail connection |
 | Notion page queries/content/new note | Notion API | Only with Bilal's standalone integration and shared page access |
@@ -17,6 +17,10 @@ Reviewed **22 October 2026**. These are implemented controls and practical limit
 | Search text/URLs | Chrome and target websites | When a browser tool opens them |
 
 The second trigger check happens after Groq transcription. A rejected final transcript is prevented from reaching the agent, but that command audio has already been uploaded to Groq. Rejected **local verifier candidates** do not get uploaded by the wake verifier.
+
+An active session waits up to15s for the next utterance after the reply ends. A silent wait is not saved/uploaded as a command, but detected background speech can become a follow-up and go to Groq/Gemini. End the conversation or cancel when it should stop listening. Full-command capture is paused during TTS and missing-input/approval interaction; the separate fixed-grammar cancellation recognizer may run during processing.
+
+The global hold shortcut polls only the Windows left Ctrl and left Shift states every 25ms. It has no typed-key log, does not intercept arbitrary keypresses, and does not consume the modifiers from other applications. Holding cannot approve an action or submit a detail dialog. New held captures are bounded at 600s per chunk rather than unlimited.
 
 There is no fully offline reasoning fallback. Provider retention/billing rules are separate from this application's local controls.
 

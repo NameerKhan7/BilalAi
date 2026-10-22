@@ -53,20 +53,30 @@ Tools return evidence, errors, or pending work. A launch result with `verified: 
 ## One voice request, end to end
 
 1. `main.py` creates the Qt application, single-instance lock, controller, companion and tray. The companion starts hidden.
-2. `WakeMonitor` reads 80 ms audio blocks. `DetectionGate` applies the acoustic threshold, consecutive-frame requirement and repeat cooldown.
+2. `WakeMonitor` reads 80 ms audio blocks. `DetectionGate` applies the live `candidate_threshold` (0.30, falling back to `threshold`), consecutive-frame requirement and repeat cooldown. The standalone acoustic diagnostic retains 0.80. Every accepted live candidate still requires full local phrase verification.
 3. A candidate includes recent audio plus short lookahead. `OfflineWakeVerifier` checks it in a background thread while the microphone continues buffering.
 4. Only an accepted candidate produces a callback containing `phrase_verified=True`. The controller rejects stale, disabled or unverified callbacks.
 5. Command capture reuses that microphone stream and buffered audio. It stops after configured silence, a user stop, or the maximum recording time.
 6. The controller saves a local WAV and sends it to Groq. For wake-started requests, the final transcript must also contain “Hey Bilal”; otherwise agent execution is skipped. Typed/manual requests do not need that phrase.
 7. `RequestProcessor.handle()` creates an executor and calls `AgentBrain.run()`.
 8. The agent answers directly or performs the bounded observe–act–verify loop below.
-9. The controller saves the answer for recorded requests and signals the Qt UI. The companion speaks through Windows speech and hides after completion. Wake monitoring resumes when the UI and request lifecycle allow it.
+9. The controller saves the answer for recorded requests and signals the Qt UI. The companion speaks through Windows speech. After speech ends, the UI schedules follow-up capture while the conversation remains active; it hides after 15s without new speech or an explicit ending. Wake monitoring resumes once the conversation and request lifecycle allow it.
 
-See [configuration](configuration.md) for the current audio and wake constants. The phrase verifier is context-biased: it receives `Hey Bilal.` as vocabulary context and additionally requires the full phrase, average log probability at least `-0.49`, and no-speech probability below `0.6`. It is neither speaker identification nor playback echo cancellation.
+See [configuration](configuration.md) for the current audio and wake constants. The phrase verifier is context-biased: it receives `Hey Bilal.` as vocabulary context and additionally requires the full phrase, average log probability at least `-0.60`, and no-speech probability below `0.6`. It is neither speaker identification nor playback echo cancellation.
+
+## Conversation presence and global hold-to-talk
+
+`conversation.py` separates session presence from model reasoning: `ConversationSession.active` keeps the companion present, while `held` keeps it visible even if the session has ended. `AssistantWindow` begins a session on wake, manual, typed, or hold interaction. A restartable Qt timer prevents reply/finished signals from opening duplicate captures.
+
+`HoldToTalk` polls only the left Ctrl/left Shift states through `GetAsyncKeyState` every 25ms and emits held/released transitions. It does not capture arbitrary keystrokes or consume them from other apps. On a permitted hold, the UI interrupts speech, sets a thread-safe hold event, and starts a capture if idle. Release requests capture finish. Missing-input/approval dialogs cannot be submitted or approved through this shortcut.
+
+`CommandEndpoint.feed(..., held=True)` suppresses silence and initial-no-speech endpoints but retains a maximum duration. A new hold capture uses 600s; existing ordinary wake/manual captures retain their original 90s bound. Follow-up capture uses a 15s initial wait and 600s total bound; after speech starts, 4s ending silence applies. A bounded chunk can process while the keys remain held, with presence retained.
+
+After TTS has finished and the controller is idle, `continue_conversation()` starts the next follow-up capture. It does not run full-command capture during speech, approval, or missing input. No-speech timeout emits `conversation_timeout`; recognized whole-utterance endings emit `conversation_ended` before any agent tool run. Captured follow-up speech is a normal Groq/Gemini request without another wake phrase; silent waits are not uploaded.
 
 ## The agent loop
 
-`AgentBrain.run(query, executor, ...)` supplies Gemini with the active request, recent conversation, confirmed preferences, current Asia/Karachi date, agent rules and declared tools. The default retains six request/answer pairs in memory.
+`AgentBrain.run(query, executor, ...)` supplies Gemini with the active request, recent conversation, confirmed preferences, current Asia/Karachi date, agent rules and declared tools. The default retains six request/answer pairs in memory. Active prompt policy uses English assistant commentary, relevant follow-up questions, and restrained contextual humor; explicitly requested non-English document content remains possible. Conversation is context, not permission for additional actions.
 
 Each round:
 
@@ -130,4 +140,4 @@ A SIGINT handler requests shutdown through an event; the Qt timer performs clean
 
 ## Current boundaries
 
-Implemented does not mean accepted in every environment. Live Gmail/Notion account acceptance, physical startup/power checks, and fresh background-video/voice testing remain separate acceptance work. The historical automated snapshot is 123 passing tests on 21 October 2026; it is not evidence of live delivery or universal app compatibility. Follow [testing](testing.md) and the [field acceptance guide](FIELD_ACCEPTANCE.md).
+Implemented does not mean accepted in every environment. Live Gmail/Notion account acceptance, physical startup/power checks, and fresh background-video/voice testing remain separate acceptance work. The latest automated snapshot is 141 passing tests on 23 October 2026; it is not evidence of live delivery or universal app compatibility. Follow [testing](testing.md) and the [field acceptance guide](FIELD_ACCEPTANCE.md).

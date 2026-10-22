@@ -23,7 +23,8 @@ class WakeMonitor:
             from wakeword import load_detector,load_settings
             from wakeword_gate import DetectionGate
             model=load_detector();settings=load_settings()
-            gate=DetectionGate(settings['threshold'],settings.get('consecutive_frames',2),settings.get('cooldown_seconds',.6))
+            # This gate only schedules offline verification; it never authorizes activation.
+            gate=DetectionGate(settings.get('candidate_threshold',settings['threshold']),settings.get('consecutive_frames',2),settings.get('cooldown_seconds',.6))
             self.verifier.start()
         except Exception:
             self.status='model_error';self.released.set()

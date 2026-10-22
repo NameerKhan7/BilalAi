@@ -20,7 +20,7 @@
 
 ---
 
-Bilal combines voice input, an LLM agent, and tools that operate on your PC. Say **“Hey Bilal”** to bring up a small animated companion, speak your request, and hear the reply. The companion hides when the task and spoken response finish.
+Bilal combines voice input, an LLM agent, and tools that operate on your PC. Say **“Hey Bilal”** to bring up a small animated companion, speak your request, and hear the reply. After the reply, the companion stays available for a follow-up without another wake phrase. It hides after 15 seconds without new speech, an explicit conversation ending, or cancellation.
 
 When something is missing, Bilal asks. When an email is ready to send or a power action is requested, it waits for your confirmation.
 
@@ -118,6 +118,7 @@ Speak naturally in one utterance; the wake check buffers audio while it verifies
 
 | Action | Control |
 | --- | --- |
+| Hold to talk globally | Hold **left Ctrl + left Shift**, speak, then release either key to submit the recording. |
 | Start or finish recording | Click the companion, or use the tray's recording action. |
 | Type a request or read a reply | Open **Read reply / type a request** from the tray. |
 | Provide a missing detail | Type or paste into the temporary input box; press **Enter** or **Continue**. |
@@ -127,7 +128,11 @@ Speak naturally in one utterance; the wake check buffers audio while it verifies
 | Review waiting actions | Open **Pending approvals** in the tray. |
 | Exit the assistant | Choose **Quit Bilal** in the tray. |
 
-Command capture allows up to **90 seconds**, waits up to **10 seconds** for speech to start, and ends after **4 seconds of silence** following detected speech. Pauses longer than that can finish a recording. Cancellation prevents subsequent steps; it cannot undo an action already completed.
+Ordinary wake/manual capture allows up to **90 seconds**, waits up to **10 seconds** for speech to start, and ends after **4 seconds of silence** following detected speech. A new hold-to-talk capture suppresses silence/no-speech stopping while the keys remain held; release submits it, with a **600-second chunk bound**. Processing a bounded chunk does not hide the companion while the keys are held.
+
+After a reply finishes, Bilal listens for the next utterance for **15 seconds**. Once speech begins, the usual four-second ending silence applies; a new wake phrase is unnecessary during this active session. Say **“we are done”**, **“goodbye Bilal”**, or **“stop listening”** to end it. No full-command capture runs during spoken output, missing input, or approval.
+
+**During an active session, captured follow-up speech goes to Groq and its request goes to Gemini**, including background speech detected as an utterance. A silent follow-up wait is not uploaded. The global shortcut polls only the two left modifier states; it does not log typing or consume the keys from other apps. Cancellation stops later steps and cannot undo completed actions.
 
 ### The companion
 
@@ -149,7 +154,7 @@ flowchart LR
     E --> H[Windows spoken reply]
 ```
 
-The agent interprets the goal, chooses a tool, observes its returned result, and decides what to do next. Questions can be answered without desktop actions. Tasks have a **12-round / 180-second** reasoning budget, with bounded tool timeouts and cancellation checks.
+Assistant commentary, clarification, and spoken replies use English, with brief context-appropriate humor when useful. Explicitly requested non-English document content can retain that language. The agent interprets the goal, chooses a tool, observes its returned result, and decides what to do next. Questions can be answered without desktop actions. Tasks have a **12-round / 180-second** reasoning budget, with bounded tool timeouts and cancellation checks.
 
 Desktop control uses Windows accessibility information. Each generic action invalidates previously observed control IDs, so the agent must inspect again before acting further. Launching an app or opening search results alone does not establish that the whole task succeeded.
 
@@ -166,6 +171,8 @@ Desktop control uses Windows accessibility information. Each generic action inva
 | Account credential storage | Windows DPAPI |
 
 ### Wake activation and background audio
+
+The live monitor uses a **0.30 candidate threshold**, while the standalone classifier diagnostic retains **0.80**. Both retain two-frame confirmation; the more permissive live candidate still must pass the local phrase verifier. This is a policy change, not newly trained classifier weights.
 
 An acoustic detection score alone cannot activate the companion. Bilal checks a candidate with the offline phrase verifier, requiring the complete **“Hey Bilal”** phrase and a strict recognition score. The verifier uses wake vocabulary context; that context alone is not sufficient to activate it.
 
@@ -204,7 +211,7 @@ Live account acceptance is still pending. See the [implementation status](docs/M
 | Data or action | Where it goes |
 | --- | --- |
 | Wake candidates and phrase verification | Processed locally; candidate verification makes no provider calls. |
-| Recorded commands | Sent to Groq for transcription after activation or manual recording. |
+| Recorded commands and active-session follow-ups | Sent to Groq after wake/manual/hold activation or detected follow-up speech; silent follow-up waits are not uploaded. |
 | Requests, relevant observations, and confirmed preferences | Shared with Gemini when used for reasoning. |
 | Desktop actions | Executed locally through defined tools. |
 | Connected account operations | Sent to the corresponding Gmail or Notion API. |
@@ -251,7 +258,7 @@ Remove automatic startup:
 .\venv\Scripts\python.exe .\check_mvp_readiness.py --tests
 ```
 
-**Validation snapshot — 21 October 2026:** 123 automated tests passed. Coverage includes the agent loop, stale controls, recording, transcription, wake gating, contextual input, approvals, cancellation, media verification, shutdown cleanup, and mocked power actions. Account and power effects in these tests are simulated; passing them does not establish live account delivery or complete physical voice acceptance.
+**Validation snapshot — 23 October 2026:** 141 automated tests passed. Coverage includes the agent loop, stale controls, recording, transcription, wake gating, contextual input, approvals, cancellation, media verification, shutdown cleanup, and mocked power actions. Account and power effects in these tests are simulated; passing them does not establish live account delivery or complete physical voice acceptance.
 
 The readiness report is written to the ignored `logs/mvp_readiness.json`. It checks local configuration without account API calls or microphone recording.
 
@@ -278,7 +285,7 @@ This renders the eight character states without microphone or API usage. Images 
 
 | Files | Responsibility |
 | --- | --- |
-| `main.py`, `ui_controller.py`, `contextual_input.py` | Companion UI, request lifecycle, and missing-detail popup |
+| `main.py`, `ui_controller.py`, `contextual_input.py`, `conversation.py`, `hold_to_talk.py` | Companion UI, conversation presence, global hold-to-talk, request lifecycle, and missing-detail popup |
 | `agent_core.py`, `agent_tools.py`, `request_router.py` | Model reasoning, tool declarations, and dispatch |
 | `wake_service.py`, `wake_verifier.py`, `wakeword_gate.py` | Wake monitoring, local phrase check, and temporal gate |
 | `audio_capture.py`, `stt_client.py`, `voice_cancel.py` | Recording, command transcription, and interruption |
@@ -297,7 +304,7 @@ This renders the eight character states without microphone or API usage. Images 
 | “Bilal is already running” | Use the existing tray instance; quit it before restarting an update. |
 | Wake activation is unavailable | Run `setup_wake_verifier.py`, restart, and inspect `logs/ui_startup.json`. |
 | A video triggers the companion | Check whether it contained the full phrase; mark false activations from the tray and follow the background-playback test guide. |
-| Recording ends while thinking | Pauses over four seconds can end capture. Keep thinking pauses shorter; capture uses silence rather than semantic sentence completion. |
+| Recording ends while thinking | Ordinary capture ends after four seconds of silence. Use left Ctrl + left Shift hold-to-talk for longer thinking pauses, releasing to submit. |
 | No audible reply | Enable **Speak replies**, check the default output device, and check installed Windows voices. |
 | Gmail or Notion is unavailable | Complete Bilal's standalone account setup and page permissions. |
 | A task fails or claims the wrong outcome | Inspect the private `logs/agent_latest.json` trace and saved transcript. |

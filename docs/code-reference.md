@@ -2,7 +2,7 @@
 
 [Documentation home](README.md) · [Architecture](architecture.md) · [Testing](testing.md)
 
-Reviewed **22 October 2026**. Paths below are relative to the repository root. Follow the runtime from `main.py` rather than treating every file as an active subsystem.
+Reviewed **23 October 2026**. Paths below are relative to the repository root. Follow the runtime from `main.py` rather than treating every file as an active subsystem.
 
 ## Start reading here
 
@@ -19,13 +19,15 @@ Reviewed **22 October 2026**. Paths below are relative to the repository root. F
 | --- | --- | --- |
 | [`main.py`](../main.py) | `main()`, `AssistantWindow`, `CharacterStage`, `VoiceWave`, `managed_painter()` | Qt application, tray, tiny character/orb, speech, dialogs, animation, runtime status and graceful exit |
 | [`ui_controller.py`](../ui_controller.py) | `AssistantController`, `event` signal, `record()`, `send()`, `submit_input()`, `resolve_approval()`, `cancel_request()`, `close()` | Background task orchestration and lifecycle state |
+| [`conversation.py`](../conversation.py) | `ConversationSession`, `FOLLOWUP_WAIT_SECONDS`, `is_conversation_end()` | Session presence, 15s follow-up wait, and exact whole-utterance endings |
+| [`hold_to_talk.py`](../hold_to_talk.py) | `HoldToTalk`, `changed` signal, `poll()` | Global left Ctrl + left Shift state polling and held/released transitions; no typing log |
 | [`contextual_input.py`](../contextual_input.py) | `ContextInputDialog`, `validate_detail()` | Temporary missing-detail dialog and local validation |
 | [`launch_bilal.pyw`](../launch_bilal.pyw) | Launcher entry point | Hidden startup, output redirection and Qt logging |
 | [`startup_windows.py`](../startup_windows.py) | `shortcut_path()`, `configure()` | Install/remove and verify current-user startup shortcut |
 | [`runtime_paths.py`](../runtime_paths.py) | `worker_python()` | Locate the console interpreter for worker subprocesses |
 | [`brand_theme.json`](../brand_theme.json) | Theme data | UI colors, typography and companion layout settings |
 
-The controller's main states are `idle`, `recording`, `transcribing`, `thinking`, `learning` and `approval`. A pending contextual input is tracked separately. UI events include progress, transcript, reply, input, approval, error and finished signals. Visual poses are presentation states; they are not the same as controller task states.
+The controller's main states are `idle`, `recording`, `transcribing`, `thinking`, `learning` and `approval`. A pending contextual input, conversation-active flag, capture mode, and thread-safe hold event are tracked separately. `AssistantWindow.begin_conversation()`, `continue_conversation()`, `end_conversation()`, and `hold_changed()` govern presence and follow-up capture independently of model turns. UI events include progress, transcript, reply, input, approval, error and finished signals. Visual poses are presentation states; they are not the same as controller task states.
 
 ## Reasoning and tool boundary
 
@@ -75,7 +77,7 @@ All declared parameters are strings; enums constrain selected fields. Dispatch r
 | [`wakeword_gate.py`](../wakeword_gate.py) | `DetectionGate` | Threshold, consecutive frames, cooldown and rearming |
 | [`wake_service.py`](../wake_service.py) | `WakeMonitor` | Persistent wake microphone loop, buffering, verification handoff and retry |
 | [`wake_verifier.py`](../wake_verifier.py) | `OfflineWakeVerifier`, `command_after_wake()` | Local Whisper phrase check and final transcript trigger extraction |
-| [`audio_capture.py`](../audio_capture.py) | `CaptureConfig`, `CaptureResult`, `CommandEndpoint`, `capture_command()`, `save_recording()` | Audio endpoint logic, stream capture and WAV serialization |
+| [`audio_capture.py`](../audio_capture.py) | `CaptureConfig`, `CaptureResult`, `CommandEndpoint`, `capture_command()`, `save_recording()` | Audio endpoint logic with held-state suppression of silence/no-speech endpoints, bounded stream capture and WAV serialization |
 | [`stt_client.py`](../stt_client.py) | `transcribe_recording()`, `TranscriptionError` | Groq command transcription with bounded requests and vocabulary context |
 | [`voice_cancel.py`](../voice_cancel.py) | `CancelListener`, `is_cancel_request()`, `strip_wake_prefix()` | Offline cancellation recognition and full-utterance cancellation handling |
 | [`setup_wake_verifier.py`](../setup_wake_verifier.py) | Installer CLI | Download pinned public verifier model and verify weight integrity |
@@ -117,7 +119,7 @@ Learning means confirmed preferences and reviewed candidate training. No automat
 
 | Desired change | Start in | Then review |
 | --- | --- | --- |
-| Longer thinking pauses while dictating | `audio_capture.py` | Endpoint tests and user guide |
+| Hold-to-talk or follow-up timing | `hold_to_talk.py`, `conversation.py`, `main.py`, `ui_controller.py`, `audio_capture.py` | Endpoint, presence, modifier release, and microphone lifecycle tests |
 | Wake false-positive handling | `wake_service.py`, `wake_verifier.py`, `wakeword_gate.py` | Wake activation tests and fresh field recordings |
 | Agent picks the wrong task | `agent_core.py` active prompt/loop | Agent-loop tests and actual tool evidence |
 | New local capability | `agent_tools.py` plus dedicated backend | Validation, verification, cancellation and approvals |

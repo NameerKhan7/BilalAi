@@ -51,3 +51,12 @@ For Notion, choose and share a real test parent page. Start with read-only page 
 ## Background playback regression
 
 After offline model setup and restarting Bilal, play ordinary YouTube speech/music for several minutes without saying the wake phrase. Expect the companion to remain hidden and no new agent action. Then say “Hey Bilal, explain websites” with the video playing at normal volume; check activation and that the first command words are retained. Repeat with “hey” alone and non-trigger chatter; expect no activation. Finally turn wake listening off from the tray and repeat the full phrase; expect no activation. The test is not a guarantee of speaker isolation: media that actually contains the complete trigger can still activate this version.
+
+## Conversation and global hold acceptance — 23 October 2026
+
+1. From another application, hold **left Ctrl + left Shift**. Expect the companion to appear and record. Right-side modifiers alone should not start it. Other applications still receive these modifiers.
+2. Say a harmless question, pause over four seconds while keeping both keys held, and continue. Expect capture to remain active. Release either key; expect transcription and an English answer containing both parts.
+3. After the spoken reply ends, answer its question or give a contextual follow-up without saying the trigger. Expect another turn. Check that microphone capture does not run during Bilal's spoken output.
+4. After a reply, stay silent for fifteen seconds. Expect the companion to hide and wake monitoring to resume. Repeat and say “we are done” instead; expect a short closing reply and no further capture.
+5. During a missing-input or approval dialog, press/release the shortcut. Expect no submission or approval. Complete or reject the dialog manually.
+6. Test the full wake phrase at normal distance and with ordinary media playback. Verify activation and retained first command words; do not treat saved-clip replay as proof of current microphone accuracy. While a conversation is active, detected background speech can count as a follow-up: end/cancel the session when it should stop listening.

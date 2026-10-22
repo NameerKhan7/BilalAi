@@ -4,7 +4,7 @@
 
 Bilal needs both repeatable software tests and real use on the target PC. A mocked send is not a delivered email, an installed speech engine is not an audible reply, and a configured startup shortcut is not a successful sign-in run.
 
-**Recorded baseline:** 123 automated tests passed on **21 October 2026**. This is the previously recorded result, not a claim that tests were rerun while writing these guides. The current documentation pass validates documentation separately. Live Gmail/Notion acceptance, fresh physical voice/background-media testing, and sign-in acceptance remain pending.
+**Latest regression:** 141 automated tests passed on **23 October 2026** with native Windows support. These cover simulated audio/providers and mocked external effects. Live Gmail/Notion acceptance, fresh physical voice/background-media testing, real keyboard/microphone acceptance, and sign-in acceptance remain pending.
 
 ## Run the regression suite
 
@@ -13,6 +13,8 @@ From the project root, using its virtual environment:
 ```powershell
 .\venv\Scripts\python.exe -m unittest discover -s tests -q
 ```
+
+The hold/session tests cover endpoints, modifier-state edges, UI presence, release, no-speech timeout, explicit end, and speech/input/approval interactions. Native microphone/hotkey acceptance remains separate.
 
 The suite uses simulated providers and side effects. It should not be treated as permission to send mail, create live account content, or power off the PC. Select relevant tests during development, then run the full suite for changes that cross the controller, agent, tool, or approval boundaries.
 
@@ -40,7 +42,7 @@ Read the report's individual statuses. `stored_not_verified`, `configured`, and 
 | `test_desktop_worker.py`, `test_spotify.py` | Accessible desktop observations, stale controls, guarded actions, and playback handling. |
 | `test_audio_capture.py`, `test_stt_client.py` | Speech endpoint behavior, recording format, transcription inputs, and safe provider failures. |
 | `test_wake_acceptance.py`, `test_wake_activation.py` | Wake policy, verified activation, final trigger checks, and rejection paths. |
-| `test_ui_controller.py`, `test_acceptance_flow.py`, `test_contextual_input.py` | Request lifecycle, missing input, cancellation, and approval handoffs. |
+| `test_ui_controller.py`, `test_acceptance_flow.py`, `test_contextual_input.py`, `test_conversation.py` | Request lifecycle, missing input, cancellation, and approval handoffs. |
 | `test_business_learning.py`, `test_power_tools.py` | Account/memory workflows, reviewed learning, and confirmed power behavior with simulated effects. |
 | `test_background_startup.py`, `test_paint_shutdown.py`, `test_mvp_voice_web.py` | Hidden startup, cleanup, and voice/web behavior. |
 
@@ -55,7 +57,12 @@ Quit any previous instance from its tray menu and launch the updated app. Record
 | Launch without speaking | One tray instance; companion hidden. |
 | Ordinary speech/music or YouTube without the trigger | No companion activation and no agent task. |
 | “hey” alone, “hee haa,” or similar non-trigger sounds | No activation. |
-| Full “Hey Bilal” followed immediately by a harmless question | Activation, first command words preserved, complete answer aloud, then hidden. |
+| Full “Hey Bilal” followed immediately by a harmless question | Activation, first words preserved, complete answer aloud, then a follow-up listening window. |
+| Speak a follow-up after the answer without repeating the trigger | Correct contextual response;15s timeout begins only when ready for new speech. |
+| No new speech after reply | No command upload; session ends/hides after 15s without speech. |
+| Say “we are done” or “stop listening” | Session closes; no agent tool task for that ending. |
+| Hold left Ctrl + left Shift, pause over4s, continue, then release | Capture survives the thinking pause; release submits once; companion stays present while held. |
+| Hold/release during TTS, input, or approval | No self-recorded reply; no shortcut submission or approval of dialogs; no duplicate capture. |
 | Dictated request with a three-second thinking pause | Command continues across the pause. A pause over four seconds may end capture by design. |
 | Missing email recipient | Contextual input appears; invalid address does not continue; cancellation stops the request. |
 | “never mind” during a harmless processing request | Stops subsequent work. Completed actions cannot be undone. |
@@ -76,7 +83,7 @@ These commands deliberately listen to the microphone. Stop the running assistant
 .\venv\Scripts\python.exe .\wakeword.py --seconds 60
 ```
 
-`wakeword.py` tests the acoustic classifier and temporal score policy. It **does not test the GUI's full offline phrase-verification gate**, final command trigger check, transcription, agent, or spoken output. A high score is a candidate, not proof that the full app will activate. Its threshold/frame flags are diagnostic overrides for that process, not automatic deployed-policy changes.
+`wakeword.py` tests the acoustic classifier and temporal score policy. It **does not test the GUI's full offline phrase-verification gate**, final command trigger check, transcription, agent, or spoken output. A high score is a candidate, not proof that the full app will activate. The live monitor now uses `candidate_threshold=0.30` before full local phrase verification, whereas this standalone diagnostic retains `threshold=0.80`. This policy change is not a new trained model or an accuracy claim. Its threshold/frame flags are diagnostic overrides for that process, not automatic deployed-policy changes.
 
 ## Reviewed wake-learning workflow
 
@@ -124,3 +131,11 @@ This renders character states to the ignored `ui_preview/` folder without microp
 ## Record evidence consistently
 
 For each field check, record the date, app/version, exact request, expected result, observed result, pass/fail, and any relevant redacted trace reference. Keep raw recordings and account details private. Do not turn pending checks into “passed” because related unit tests succeeded.
+
+## Wake replay evidence — 23 October 2026
+
+The first-candidate audio-window replay, including the classifier gate and local verifier, accepted 8 of 10 historical positive-labelled recordings after the candidate threshold/context/confidence changes, compared with 2 under the old streaming settings. One historical positive label is the user-reported wrong phrase “hey Bill”; these labels are not a clean accuracy dataset. None of 13 historical negatives or 9 resampled synthetic negatives activated. A synthetic positive did not activate, so recall is still imperfect.
+
+Full-file verifier checks and candidate-window checks are different: the verifier alone accepted one historical negative after this recalibration, while the classifier prevented that clip from activating. Both gates remain necessary. Do not describe these results as zero false activations in general, speaker identification, or fresh YouTube/microphone acceptance. The live shortcut and normal-distance wake tests below remain necessary.
+
+A harmless live Gemini assignment prompt produced a relevant English clarification about the assignment topic with desktop/account tools disabled. This checks one conversational example, not every follow-up or humor response.

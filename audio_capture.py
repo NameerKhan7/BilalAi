@@ -59,7 +59,7 @@ class CommandEndpoint:
         self.reason=None
         self.rms=0.0
 
-    def feed(self, frame):
+    def feed(self, frame, held=False):
         if self.reason is not None:
             raise RuntimeError('Capture already ended.')
         frame=np.asarray(frame,dtype=np.int16).reshape(-1).copy()
@@ -76,9 +76,9 @@ class CommandEndpoint:
                 self.last_speech_end=self.total_samples
         elif self.rms>=self.threshold*.60:
             self.last_speech_end=self.total_samples
-        if self.start_index is not None and self.total_samples-self.last_speech_end>=round(self.config.silence_seconds*self.config.sample_rate):
+        if not held and self.start_index is not None and self.total_samples-self.last_speech_end>=round(self.config.silence_seconds*self.config.sample_rate):
             self.reason='silence'
-        elif self.start_index is None and self.total_samples>=round(self.config.initial_wait_seconds*self.config.sample_rate):
+        elif not held and self.start_index is None and self.total_samples>=round(self.config.initial_wait_seconds*self.config.sample_rate):
             self.reason='no_speech'
         elif self.total_samples>=round(self.config.max_seconds*self.config.sample_rate):
             self.reason='max_length'
@@ -94,19 +94,19 @@ class CommandEndpoint:
         return CaptureResult(audio[self.start_index:end].copy(),self.config.sample_rate,reason,True,self.threshold)
 
 
-def capture_command(config=CaptureConfig(),device=None,stop_event=None,on_event=None,stream=None,leading_audio=None):
+def capture_command(config=CaptureConfig(),device=None,stop_event=None,on_event=None,stream=None,leading_audio=None,hold_event=None):
     """Capture manually or reuse the already-open wake stream without a microphone gap."""
     stop_event=stop_event or threading.Event()
     on_event=on_event or (lambda name,data:None)
     on_event('preparing',None)
     if stream is not None:
-        return _capture_stream(stream,config,stop_event,on_event,leading_audio)
+        return _capture_stream(stream,config,stop_event,on_event,leading_audio,hold_event)
     import sounddevice as sd
     with sd.RawInputStream(samplerate=config.sample_rate,blocksize=config.block_samples,
                           dtype='int16',channels=1,device=device,latency='low') as opened:
-        return _capture_stream(opened,config,stop_event,on_event,leading_audio)
+        return _capture_stream(opened,config,stop_event,on_event,leading_audio,hold_event)
 
-def _capture_stream(stream,config,stop_event,on_event,leading_audio=None):
+def _capture_stream(stream,config,stop_event,on_event,leading_audio=None,hold_event=None):
     noise=[]
     blocks=round(config.calibration_seconds*config.sample_rate/config.block_samples)
     for _ in range(blocks):
@@ -120,14 +120,15 @@ def _capture_stream(stream,config,stop_event,on_event,leading_audio=None):
     if leading_audio is not None:
         samples=np.asarray(leading_audio,dtype=np.int16)
         for offset in range(0,len(samples),config.block_samples):
-            endpoint.feed(samples[offset:offset+config.block_samples])
+            if endpoint.feed(samples[offset:offset+config.block_samples],held=bool(hold_event and hold_event.is_set())) is not None:break
     if stop_event.is_set(): return endpoint.finish('manual')
+    if endpoint.reason is not None:return endpoint.finish()
     on_event('ready',{'latency_ms':stream.latency*1000,'threshold':endpoint.threshold})
     frame_count=0
     while not stop_event.is_set():
         raw,overflow=stream.read(config.block_samples)
         if overflow: raise RuntimeError('Microphone overflow. Close other audio apps and retry.')
-        reason=endpoint.feed(np.frombuffer(raw,dtype=np.int16))
+        reason=endpoint.feed(np.frombuffer(raw,dtype=np.int16),held=bool(hold_event and hold_event.is_set()))
         frame_count+=1
         if frame_count%5==0:
             on_event('level',{'rms':endpoint.rms,'speech_detected':endpoint.start_index is not None,'silence_seconds':max(0,(endpoint.total_samples-endpoint.last_speech_end)/config.sample_rate) if endpoint.start_index is not None else 0})
