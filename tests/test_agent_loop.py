@@ -117,6 +117,22 @@ class AgentLoopTests(unittest.TestCase):
         self.assertIn('Tomorrow is ',request['config'].system_instruction)
         self.executor.execute.assert_not_called()
 
+    def test_interface_stays_english_despite_old_language_preference(self):
+        self.brain.state=Mock()
+        self.brain.state.memories.return_value={'language':'Urdu'}
+        self.client.models.generate_content.return_value=response('Please enter the email address.')
+        self.brain.run('Email likho',self.executor)
+        instruction=self.client.models.generate_content.call_args.kwargs['config'].system_instruction
+        self.assertIn("Bilal's interface language is English",instruction)
+        self.assertIn('even when the user speaks another language',instruction)
+        self.assertNotIn("Match the user's language",instruction)
+
+    def test_email_clarification_uses_local_english_prompt(self):
+        tools=AgentToolExecutor(desktop=Mock())
+        result=tools.execute('request_input',{'question':'براہ کرم ای میل بتائیں','field':'email'})
+        self.assertEqual(result['input_request'],{'question':'Please enter the email address.','field':'email'})
+        self.assertEqual(result['reply'],'Please enter the email address.')
+
     def test_unknown_tools_and_extra_args_cannot_execute(self):
         desktop=Mock()
         tools=AgentToolExecutor(desktop=desktop)

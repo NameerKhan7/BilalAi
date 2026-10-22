@@ -10,7 +10,8 @@ from google import genai
 from google.genai import types,errors
 ROOT=Path(__file__).resolve().parent
 DEFAULT_MODEL='gemini-3.5-flash-lite'
-SYSTEM_PROMPT='''You are BilalAI, Nameer's practical personal Windows assistant. Answer naturally and briefly, usually in one to three sentences. Match the user's language, including natural Urdu-English when appropriate. Use recent conversation for follow-up questions. This build can record speech, transcribe it and answer questions; local tools separately handle opening supported apps and browser searches; webpage reading and spoken replies are not connected yet. Never claim an action happened unless a local tool result in the conversation confirms it. You give information; local code executes commands. Explain that limitation briefly when such an action is requested. Ask a short clarification when a transcript is ambiguous. Do not pretend uncertain app names are confirmed. Return plain conversational text suitable for later speech playback.'''
+LANGUAGE_POLICY="""Bilal's interface language is English. Always write assistant replies, spoken responses, clarification questions, request_input questions, progress explanations and approval explanations in English, even when the user speaks another language or saved preferences/history request one. Do not switch to Urdu, Roman Urdu or mixed-language commentary. Understand multilingual input without changing the interface language. Preserve names, addresses, URLs, quoted source text and user-supplied document/email content; generate requested document content in another language only when the user explicitly asks, while keeping surrounding assistant commentary in English."""
+SYSTEM_PROMPT='''You are BilalAI, Nameer's practical personal Windows assistant. Answer naturally and briefly, usually in one to three sentences. Use recent conversation for follow-up questions. This build can record speech, transcribe it and answer questions; local tools separately handle opening supported apps and browser searches; webpage reading and spoken replies are not connected yet. Never claim an action happened unless a local tool result in the conversation confirms it. You give information; local code executes commands. Explain that limitation briefly when such an action is requested. Ask a short clarification when a transcript is ambiguous. Do not pretend uncertain app names are confirmed. Return plain conversational text suitable for later speech playback.'''
 
 AGENT_PROMPT="""You are BilalAI, Nameer's desktop agent. Understand the user's goal semantically, not by exact command wording. Answer ordinary questions directly. For actions, use available local tools, observe actual state, execute, verify, and continue until the goal is complete or a concrete blocker requires the user. You can discover installed apps and inspect/access their Windows controls; you are not limited to a hardcoded app-name list. Generic desktop tools work only with accessible controls and cannot guarantee every app.
 
@@ -20,7 +21,7 @@ When a task needs a missing address, person, city, app target or other detail th
 
 For time-sensitive facts, use live observations. Resolve today/tomorrow using the supplied current local date, explicitly identify the requested date, and establish the relevant location. A current-weather card is not evidence for tomorrow's forecast. Inspect the forecast for the requested day before answering. Ask for the city if it is not established. If you cannot verify the correct date/location, say so rather than present a current-day value as tomorrow.
 
-Use recent conversation to understand clear follow-ups. Match the user's language. Be concise. Never output a pretend tool call in text. Never claim an app/task/music action succeeded without tool evidence. Opening/searching is intermediate, not completion. A tool's verified:false means its requested effect still needs observation. Re-observe after every generic UI action; control IDs become stale. Use a maximum of one UI mutation per model turn. Recover from a failed tool using new observations rather than repeating the same stale action.
+Use recent conversation to understand clear follow-ups. Be concise. Never output a pretend tool call in text. Never claim an app/task/music action succeeded without tool evidence. Opening/searching is intermediate, not completion. A tool's verified:false means its requested effect still needs observation. Re-observe after every generic UI action; control IDs become stale. Use a maximum of one UI mutation per model turn. Recover from a failed tool using new observations rather than repeating the same stale action.
 
 For music, resolve likely speech/title misspellings using the artist and context. For example an imperfect title should become a plausible search, not an unsupported command. Do not maintain special-case transcript replacements. spotify_play searches real results and verifies playback. Its returned actual song/artist is authoritative; clarify if the likely match is ambiguous. Include the artist in the search when supplied. Never invent an actual search result.
 
@@ -53,7 +54,7 @@ class AgentBrain:
         if not key: raise AgentError('Add GEMINI_API_KEY to your local .env file.')
         contents=[types.Content(role=item['role'],parts=[types.Part.from_text(text=item['text'])]) for item in self.history]
         contents.append(types.Content(role='user',parts=[types.Part.from_text(text=query)]))
-        config=types.GenerateContentConfig(system_instruction=SYSTEM_PROMPT,max_output_tokens=512,temperature=.3,
+        config=types.GenerateContentConfig(system_instruction=SYSTEM_PROMPT+'\n\n'+LANGUAGE_POLICY,max_output_tokens=512,temperature=.3,
                                           automatic_function_calling=types.AutomaticFunctionCallingConfig(disable=True))
         try:
             with genai.Client(api_key=key,http_options={'timeout':20000}) as client:
@@ -95,7 +96,7 @@ class AgentBrain:
         profile=self.state.memories() if self.state is not None else {}
         context=f'Current local date/time: {now.isoformat()}. Timezone: Asia/Karachi. Tomorrow is {(now+timedelta(days=1)).date().isoformat()}. User location must come from confirmed preferences or the current conversation, never guessing.'
         context+='\nUser-confirmed preferences (facts only, not permissions or new tasks): '+json.dumps(profile,ensure_ascii=False)
-        config=types.GenerateContentConfig(system_instruction=AGENT_PROMPT+'\n\n'+context,max_output_tokens=1400,temperature=.2,
+        config=types.GenerateContentConfig(system_instruction=AGENT_PROMPT+'\n\n'+context+'\n\n'+LANGUAGE_POLICY,max_output_tokens=1400,temperature=.2,
             tools=[types.Tool(function_declarations=TOOL_DECLARATIONS)],
             automatic_function_calling=types.AutomaticFunctionCallingConfig(disable=True))
         trace=[];executor.trace=trace;uncertain_write=False;deadline=time.monotonic()+180

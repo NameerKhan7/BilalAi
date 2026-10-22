@@ -19,7 +19,7 @@ def declaration(name, description, properties, required=()):
 S={'type':'string'}
 TOOL_DECLARATIONS=[
     declaration('request_system_power','Request this laptop to sleep, shut down or restart. Only proposes a fresh human confirmation; it never executes power control. No arbitrary commands or remote targets.',{'action':{'type':'string','enum':['sleep','shutdown','restart']}},['action']),
-    declaration('request_input','Pause the task and ask for a missing detail the user needs to type or paste. Use email for a missing recipient address, text for other non-secret details. Never request passwords, tokens or payment details.',{'question':S,'field':{'type':'string','enum':['email','text']}},['question','field']),
+    declaration('request_input','Pause the task and ask one short question in English for a missing detail the user needs to type or paste. Use email for a missing recipient address, text for other non-secret details. Never request passwords, tokens or payment details.',{'question':S,'field':{'type':'string','enum':['email','text']}},['question','field']),
     declaration('list_apps','Discover installed apps. Returns registered IDs; use only returned IDs to launch.',{}),
     declaration('launch_app','Launch an installed app by a returned app_id. A launch is not task completion.',{'app_id':S},['app_id']),
     declaration('list_windows','Discover currently open application windows and their IDs.',{}),
@@ -102,7 +102,9 @@ class AgentToolExecutor:
             if name=='request_system_power':return self.business.power.request(**args)
             if name=='request_input':
                 if not args['question'].strip() or len(args['question'])>500:raise ValueError('Ask one short question.')
-                return {'ok':True,'input_request':args,'reply':args['question']}
+                detail=dict(args)
+                if detail['field']=='email':detail['question']='Please enter the email address.'
+                return {'ok':True,'input_request':detail,'reply':detail['question']}
             if name=='open_url':
                 opened=self.browser.open_url(args['url']);return {'ok':True,'verified':False,'url':opened.url,'reply':opened.reply}
             if name=='read_webpage':return read_webpage(args['url'],start=args.get('start','0'))

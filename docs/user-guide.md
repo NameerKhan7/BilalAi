@@ -4,6 +4,8 @@
 
 Bilal is an experimental Windows voice agent. Ordinary use is hands-free: say **“Hey Bilal”**, give the request, and listen to the answer. It can act through its implemented tools and the interfaces available on your PC. Gmail and Notion need separate setup; their live acceptance tests remain pending.
 
+The interface, assistant replies, spoken responses, and clarification prompts use **English**, including when you speak another language. Names, addresses, and dictated document/email content are preserved; explicitly requested non-English document content is separate from the interface language.
+
 ## 1. Start and stop
 
 Complete the [README quick start](../README.md#quick-start), including API keys, dependencies, and the offline wake model. From the project folder in PowerShell:
