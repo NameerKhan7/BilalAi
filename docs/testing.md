@@ -1,0 +1,126 @@
+# Testing and acceptance
+
+[Documentation home](README.md) · [Troubleshooting](troubleshooting.md) · [Detailed field checklist](FIELD_ACCEPTANCE.md)
+
+Bilal needs both repeatable software tests and real use on the target PC. A mocked send is not a delivered email, an installed speech engine is not an audible reply, and a configured startup shortcut is not a successful sign-in run.
+
+**Recorded baseline:** 123 automated tests passed on **21 October 2026**. This is the previously recorded result, not a claim that tests were rerun while writing these guides. The current documentation pass validates documentation separately. Live Gmail/Notion acceptance, fresh physical voice/background-media testing, and sign-in acceptance remain pending.
+
+## Run the regression suite
+
+From the project root, using its virtual environment:
+
+```powershell
+.\venv\Scripts\python.exe -m unittest discover -s tests -q
+```
+
+The suite uses simulated providers and side effects. It should not be treated as permission to send mail, create live account content, or power off the PC. Select relevant tests during development, then run the full suite for changes that cross the controller, agent, tool, or approval boundaries.
+
+## Run local readiness checks
+
+```powershell
+.\venv\Scripts\python.exe .\check_mvp_readiness.py
+```
+
+To include the suite in the same readiness report:
+
+```powershell
+.\venv\Scripts\python.exe .\check_mvp_readiness.py --tests
+```
+
+The report is saved to the private `logs/mvp_readiness.json`. It checks local microphone format support, available speech engines, startup shortcut targets, wake verifier file presence, valid reviewed example counts, and credential-file existence. It makes no Gmail/Notion API calls, records no microphone audio, and trains no model.
+
+Read the report's individual statuses. `stored_not_verified`, `configured`, and `format_supported` have narrower meanings than full end-to-end success. Verifier file presence does not itself establish successful inference or model checksum verification at runtime.
+
+## Test ownership map
+
+| Test files | Main behavior covered |
+| --- | --- |
+| `test_agent_core.py`, `test_agent_loop.py`, `test_request_router.py` | Agent reasoning/dispatch contracts, tool results, and request forwarding. |
+| `test_desktop_worker.py`, `test_spotify.py` | Accessible desktop observations, stale controls, guarded actions, and playback handling. |
+| `test_audio_capture.py`, `test_stt_client.py` | Speech endpoint behavior, recording format, transcription inputs, and safe provider failures. |
+| `test_wake_acceptance.py`, `test_wake_activation.py` | Wake policy, verified activation, final trigger checks, and rejection paths. |
+| `test_ui_controller.py`, `test_acceptance_flow.py`, `test_contextual_input.py` | Request lifecycle, missing input, cancellation, and approval handoffs. |
+| `test_business_learning.py`, `test_power_tools.py` | Account/memory workflows, reviewed learning, and confirmed power behavior with simulated effects. |
+| `test_background_startup.py`, `test_paint_shutdown.py`, `test_mvp_voice_web.py` | Hidden startup, cleanup, and voice/web behavior. |
+
+The executable assertions remain the source of truth for exact coverage. A filename does not promise all possible app versions or failure conditions are tested.
+
+## Physical acceptance sequence
+
+Quit any previous instance from its tray menu and launch the updated app. Record actual outcomes for the following scenarios, including the distance/noise conditions.
+
+| Scenario | Expected result |
+| --- | --- |
+| Launch without speaking | One tray instance; companion hidden. |
+| Ordinary speech/music or YouTube without the trigger | No companion activation and no agent task. |
+| “hey” alone, “hee haa,” or similar non-trigger sounds | No activation. |
+| Full “Hey Bilal” followed immediately by a harmless question | Activation, first command words preserved, complete answer aloud, then hidden. |
+| Dictated request with a three-second thinking pause | Command continues across the pause. A pause over four seconds may end capture by design. |
+| Missing email recipient | Contextual input appears; invalid address does not continue; cancellation stops the request. |
+| “never mind” during a harmless processing request | Stops subsequent work. Completed actions cannot be undone. |
+| Wake listening disabled in the tray | Full phrase does not automatically activate the companion. |
+| Network unavailable during a harmless request | A clear failure; no false claim of completed work. |
+| Sign out and back in after startup installation | One background instance; hidden until activated; wake and speech work. |
+
+Repeat the positive and negative wake tests with background playback and different distances. Media actually saying “Hey Bilal” can still trigger this version; it has no speaker identification or playback echo cancellation. The [field checklist](FIELD_ACCEPTANCE.md) gives the detailed sequence.
+
+For a real app task, inspect its final state. “Opened Spotify” is insufficient for “play this song”; verify the requested song and artist are actually playing.
+
+## Diagnose the classifier separately
+
+These commands deliberately listen to the microphone. Stop the running assistant or disable its wake monitor first to avoid sharing the device:
+
+```powershell
+.\venv\Scripts\python.exe .\wakeword.py --list-devices
+.\venv\Scripts\python.exe .\wakeword.py --seconds 60
+```
+
+`wakeword.py` tests the acoustic classifier and temporal score policy. It **does not test the GUI's full offline phrase-verification gate**, final command trigger check, transcription, agent, or spoken output. A high score is a candidate, not proof that the full app will activate. Its threshold/frame flags are diagnostic overrides for that process, not automatic deployed-policy changes.
+
+## Reviewed wake-learning workflow
+
+Use **Collect reviewed wake examples** in the tray. It pauses monitoring while the guided collector owns the microphone. Each clip is played locally; confirm only correct labels. Do not mark a mispronounced or clipped phrase as a successful full trigger.
+
+The command-line equivalent is:
+
+```powershell
+.\venv\Scripts\python.exe .\collect_wake_examples.py --label both --count 10
+```
+
+Run collection again in a separate session with different distance/noise. Preparation requires at least ten valid reviewed positives, ten valid reviewed negatives, and two sessions each containing at least two of each class. Missing or modified clips fail hash review and are excluded. Include “hey” alone, confusable words, and normal speech as negatives.
+
+```powershell
+.\venv\Scripts\python.exe .\evaluate_wake_learning.py
+.\venv\Scripts\python.exe .\train_reviewed_wake.py
+```
+
+Evaluation scores the deployed acoustic classifier/policy and writes `data/wake_examples/evaluation.json`; it does not benchmark the complete phrase-verification cascade. Preparation copies reviewed examples into a private training session and creates a candidate output plan. It does not train unless requested:
+
+```powershell
+.\venv\Scripts\python.exe .\train_reviewed_wake.py --train-candidate
+```
+
+Candidate training also needs the underlying training script's feature/data assets. Outputs stay under `models/candidates/`; no deployed model is automatically replaced. Validate with fresh independent microphone recordings, compare misses and false activations, and rerun end-to-end field acceptance before considering promotion. [Voice calibration](../training/VOICE_CALIBRATION.md) provides additional historical training context.
+
+## Account and power acceptance
+
+Live Gmail and Notion tests are intentionally pending until the user configures and authorizes them. Codex's account connections do not connect the standalone app. Follow [connection setup](getting-started.md) and the [account acceptance sequence](FIELD_ACCEPTANCE.md).
+
+For Gmail, first reject a deliberate test draft and verify no send occurred; then review and approve a fresh draft to a chosen test recipient. Verify delivery. A changed draft requires a fresh review. If a send result is uncertain, inspect Sent before retrying.
+
+For Notion, start with a requested read of a shared test page, then deliberately request a test note under the chosen parent and compare title/body with readback.
+
+Power effects in automated tests are mocked. An actual sleep/restart/shutdown test interrupts the PC and belongs to a deliberate user-controlled session with work saved. Approval acceptance is not proof that hardware or Windows completed the effect. While asleep, Bilal cannot hear a wake phrase.
+
+## Interface preview
+
+```powershell
+.\venv\Scripts\python.exe .\main.py --preview-all
+```
+
+This renders character states to the ignored `ui_preview/` folder without microphone or provider usage. Inspect the output for clipping, state differences, readability, and character/orb placement. It is not a test of live audio or task execution.
+
+## Record evidence consistently
+
+For each field check, record the date, app/version, exact request, expected result, observed result, pass/fail, and any relevant redacted trace reference. Keep raw recordings and account details private. Do not turn pending checks into “passed” because related unit tests succeeded.

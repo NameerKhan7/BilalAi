@@ -1,5 +1,9 @@
 # Six-area baseline — before implementation
 
+[Documentation home](README.md) · [Current feature reference](features.md)
+
+> Historical baseline only. Findings such as missing memory or business tools describe the code before implementation, not its current capabilities.
+
 Date: 2026-10-11 (Asia/Karachi).
 
 | Area | Baseline finding | Evidence / limit |

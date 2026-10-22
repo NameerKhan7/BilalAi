@@ -13,7 +13,8 @@
     <a href="#what-bilal-can-do">Capabilities</a> ·
     <a href="#how-it-works">Architecture</a> ·
     <a href="#privacy-and-control">Privacy</a> ·
-    <a href="#development">Development</a>
+    <a href="#development">Development</a> ·
+    <a href="docs/README.md">Documentation</a>
   </p>
 </div>
 
@@ -302,6 +303,8 @@ This renders the eight character states without microphone or API usage. Images 
 | A task fails or claims the wrong outcome | Inspect the private `logs/agent_latest.json` trace and saved transcript. |
 
 ## Project documentation
+
+Start with the [documentation hub](docs/README.md) for the user guide, feature reference, architecture, code walkthrough, configuration, testing, and troubleshooting. For code changes, follow the [contribution and documentation workflow](CONTRIBUTING.md).
 
 - [Implementation and acceptance status](docs/MVP_IMPLEMENTATION.md)
 - [Physical voice and account test guide](docs/FIELD_ACCEPTANCE.md)

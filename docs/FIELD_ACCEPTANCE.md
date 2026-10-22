@@ -1,5 +1,7 @@
 # Bilal field acceptance
 
+[Documentation home](README.md) · [Testing guide](testing.md) · [Troubleshooting](troubleshooting.md)
+
 Updated 2026-10-11, Asia/Karachi. Local regression tests and simulated account effects do not replace these checks. Physical speech, sign-in and account workflows are still pending.
 
 ## Run the local readiness report

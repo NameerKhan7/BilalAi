@@ -1,5 +1,9 @@
 # MVP implementation and acceptance status
 
+[Documentation home](README.md) · [Current feature reference](features.md) · [Testing guide](testing.md)
+
+> This is a cumulative implementation/evidence report. Its original date and older entries are preserved; use the current guides above for a structured explanation of the present code. Later sections record subsequent changes.
+
 Updated 2026-10-11, Asia/Karachi. See MVP_BASELINE.md for the pre-change findings.
 
 | Area | Implemented | Validation and remaining work |

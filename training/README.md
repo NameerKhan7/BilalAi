@@ -1,5 +1,9 @@
 # BilalAI wake-word baseline
 
+[Documentation home](../docs/README.md) · [Current wake configuration](../docs/configuration.md)
+
+> Specialist classifier-training guide. The current GUI also uses a separate offline full-phrase verifier. Retraining the classifier does not replace that activation guard; candidate models require independent validation before deployment.
+
 This folder trains a custom `hey Bilal` classifier on the existing openWakeWord audio embeddings. It uses a CPU-compatible Piper ONNX multi-speaker model, rather than the Linux/GPU sample generator in the upstream automatic notebook.
 
 ## Reproduce

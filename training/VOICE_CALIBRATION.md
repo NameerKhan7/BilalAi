@@ -1,4 +1,8 @@
-﻿# Calibrate with your actual voice
+# Calibrate with your actual voice
+
+[Documentation home](../docs/README.md) · [Current testing guide](../docs/testing.md)
+
+> This diagnostic measures the acoustic classifier and temporal policy, not the complete GUI activation flow with offline phrase verification. Keep its scores separate from end-to-end wake acceptance.
 
 The live timing reported by the user (4.2 ms median, 6.0 ms p95 per 80 ms block; 80 ms input latency) shows the processor can keep up. It does not tell us how many spoken attempts were missed. Labeled recordings distinguish low model scores, brief single-frame matches, and microphone level issues.
 
