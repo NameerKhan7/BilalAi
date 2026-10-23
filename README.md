@@ -34,6 +34,7 @@ Bilal is an experimental **Windows LLM agent with local tools and a durable task
 | Exact pasted text | Double-click the avatar, paste, then describe the task. | Local literal slots keep payload separate from model-written instructions. |
 | Files | “Save this exact text in my allowed project folder.” | Folder-scoped tools, reviewed writes and version snapshots. |
 | Owned browser | “Open this allowed website and read its form.” | Playwright-controlled Chrome in a separate Bilal profile; exact domains configured in Settings. |
+| Existing browser handoff | “Search my university Gmail for loan emails.” | Select the intended signed-in window; Bilal stays within that task/window and checks visible search results. [Handoff guide](docs/window-handoff.md). Live Gmail acceptance remains pending. |
 | Screen questions | “What is on this screen?” | Explicit capture choice and indicator before a one-shot image goes to Gemini; answer only. |
 | Read-only delegation | “Ask Codex to analyze this saved result.” | Runs a restricted CLI task and saves its answer in history; no edits. |
 | Answer questions | “What's the difference between a website and a web app?” | A conversational answer through Gemini and Windows speech. |

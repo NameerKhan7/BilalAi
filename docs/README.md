@@ -8,7 +8,9 @@ Reviewed against the repository on **23 October 2026**. Bilal is experimental. A
 
 The runtime now includes a durable task queue, Task Center, exact local input slots, policy approvals, controlled files, credential settings, read-only headless delegation, an owned Chrome DOM session, and an explicit screen-question path. **This is a partial capability-spec implementation, not completion of every P0 requirement.** Read [Task system](task-system.md) for the active runtime and the [138-item capability matrix](CAPABILITY_STATUS.md) beside the [specification](CAPABILITY_SPEC.md) for evidence and gaps.
 
-Wake is off by default behind independent acceptance. The normal talk chord is **Ctrl+Shift+Space**; Settings supports remapping/toggle after restart, and **Ctrl+Alt+Backspace** is the global stop. Provider keys belong in Windows Credential Manager through Settings; Gemini/Groq migration/readback has been verified.
+Wake is off by default behind independent acceptance. The normal talk chord is **left Ctrl + left Shift**; Settings supports remapping/toggle after restart, and **Ctrl+Alt+Backspace** is the global stop. Provider keys belong in Windows Credential Manager through Settings; Gemini/Groq migration/readback has been verified.
+
+For multiple browsers and signed-in accounts, use [Give an existing window to Bilal](window-handoff.md). The desktop/tray entry opens explicit selection rather than guessing the account.
 
 ## Start here
 

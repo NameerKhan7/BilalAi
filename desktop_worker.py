@@ -15,6 +15,7 @@ class DesktopSession:
         from pywinauto import Desktop
         self.desktop=Desktop(backend='uia')
         self.apps={};self.windows={};self.controls={}
+        self.bound_target=None
     def invalidate(self): self.controls.clear()
     def list_apps(self):
         script='[Console]::OutputEncoding=[System.Text.Encoding]::UTF8; Get-StartApps | Select-Object Name,AppID | ConvertTo-Json -Compress'
@@ -45,7 +46,12 @@ class DesktopSession:
     def list_windows(self):
         self.invalidate();self.windows={}
         entries=[]
-        for window in self.desktop.windows(visible_only=True):
+        bound=getattr(self,'bound_target',None)
+        if bound:
+            from window_grants import validate_identity
+            validate_identity(bound)
+        candidates=[self.desktop.window(handle=bound['handle'])] if bound else self.desktop.windows(visible_only=True)
+        for window in candidates:
             name=process_name(window.process_id())
             if not name or name in BLOCKED_APPS: continue
             title=window.window_text()
@@ -154,6 +160,19 @@ class DesktopSession:
         finally:win32clipboard.CloseClipboard()
         return {'ok':verified,'verified':verified,'characters':len(text),'reply':'Clipboard set and verified.'}
     def execute(self,name,args):
+        if name=='_bind_user_window':
+            from window_grants import validate_identity
+            validate_identity(args['identity']);self.bound_target=dict(args['identity']);self.windows={};self.invalidate()
+            return {'ok':True,'verified':True,'target':{'title':self.bound_target['title'],'process':self.bound_target['process']}}
+        if getattr(self,'bound_target',None):
+            from window_grants import validate_identity
+            validate_identity(self.bound_target)
+            if name not in {'invalidate_observation','list_windows','inspect_window','activate_control','enter_text','window_action','selected_browser_state','selected_browser_open_gmail','selected_gmail_search'}:
+                return {'ok':False,'verified':False,'error':'This worker is scoped to the handed-over window only.'}
+        if name in {'selected_browser_state','selected_browser_open_gmail','selected_gmail_search'}:
+            from selected_browser import SelectedBrowser
+            browser=SelectedBrowser(self)
+            return getattr(browser,{'selected_browser_state':'state','selected_browser_open_gmail':'open_gmail','selected_gmail_search':'search_gmail'}[name])(**args)
         if name=='media_control':
             from media_controls import media_control
             return asyncio.run(asyncio.wait_for(media_control(**args),10))

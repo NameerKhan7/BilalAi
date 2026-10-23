@@ -24,7 +24,9 @@ The second trigger check happens after Groq transcription. A rejected final tran
 
 Automatic post-reply recording is off by default. General clarification answers are explicitly recorded through hold-to-talk or verified wake activation and go to Groq, then Gemini with the existing task context. Email addresses still use the paste dialog. Release hides the companion immediately but does not cancel processing or spoken output; hidden does not always mean the task has finished. The separate fixed-grammar cancellation recognizer may run during processing.
 
-The configured-key Windows keyboard hook tracks only the selected chord and forwards keyboard events. It ignores injected events for activation and has no typed-key log. Ctrl+Shift+Space is the default talk chord; left Ctrl+Shift alone is optional, with toggle/remap in Settings. Ctrl+Alt+Backspace is the global stop. Holding cannot approve an action or submit an email-address dialog; it can explicitly record an answer to a pending spoken text clarification. New held captures are bounded at 600s per chunk rather than unlimited.
+The configured-key Windows keyboard hook tracks only the selected chord and forwards keyboard events. It ignores injected events for activation and has no typed-key log. Left Ctrl + left Shift is the default talk chord, with toggle/remap in Settings. Ctrl+Alt+Backspace is the global stop. Holding cannot approve an action or submit an email-address dialog; it can explicitly record an answer to a pending spoken text clarification. New held captures are bounded at 600s per chunk rather than unlimited.
+
+[Existing-window handoff](window-handoff.md) is explicit and task-scoped. Browser login stays in its existing profile, but visible selected-window text can enter the configured model and local task records. No cookies are copied. A native window property plus process identity rejects stale/reused windows; cancellation, expiry and completion revoke access. This does not grant approval to send/delete or control another profile.
 
 There is no fully offline reasoning fallback. Provider retention/billing rules are separate from this application's local controls.
 

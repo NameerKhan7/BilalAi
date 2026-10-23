@@ -20,6 +20,7 @@ DEFINITIONS={
  'artifact_read':('Read a saved non-secret artifact by returned ID.',{'artifact_id':'string'},0,False,()),
  'task_status':('Read actual pending and recent tasks. This does not start work.',{},0,False,()),
  'request_screen_view':('Ask the user to choose and visibly share one screen view for a question. No screenshot is taken until they click the capture choice.',{'question':'string'},0,False,()),
+ 'request_window_handoff':('Pause and ask the user to open/select the exact existing app or signed-in browser window. Use for ambiguous browser/profile/account targets. A human right-click handoff resumes the task with window-scoped tools; do not substitute default Chrome.',{'question':'string'},0,False,()),
  'propose_plan':('Prepare a batch of deterministic typed tool calls for one human approval before any step executes. JSON array of {tool,args}. Use file/contact/project/schedule operations; dynamic UI IDs are not supported in batches. Preserve local literal tokens.',{'plan':'string','description':'string'},0,False,()),
  'task_cancel':('Cancel the named task or latest task. Completed effects are not undone.',{'target':'string'},0,True,()),
  'task_pause':('Pause before the next tool boundary. In-flight calls may finish.',{'target':'string'},0,True,()),
@@ -52,6 +53,7 @@ class CapabilityTools:
             if not isinstance(args,dict) or set(args)!=set(schema['required']) or any(not isinstance(v,str) or len(v)>100000 for v in args.values()):raise ValueError('Plan arguments do not match a typed tool schema.')
         return plan
     def execute(self,name,args,control=None):
+        if name=='request_window_handoff':return {'ok':True,'window_request':args,'reply':args['question']}
         if name=='propose_plan':
             if not self.policy or not self.context:raise ValueError('Plan approval service is not attached.')
             plan=self.validate_plan(json.loads(args['plan']));plan=self.context.literals.mask(plan)

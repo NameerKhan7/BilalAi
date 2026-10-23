@@ -37,7 +37,7 @@ Automatic follow-up listening is disabled by default. Release of a started hold 
 
 ## Global hold-to-talk does not behave as expected
 
-Use the configured shortcut; the default is **Ctrl + Shift + Space** with left modifiers. Left Ctrl + left Shift alone works only if selected as a remap in Settings. Hold to record and release either key to submit. Wait for the listening state before speaking. The Windows hook tracks configured chord keys and forwards events; another app may also react. Restart after changing remap/toggle settings. It cannot approve a pending action or submit an email paste box. It can answer a spoken general clarification, such as city/country, while preserving the original task. If an existing task is processing, holding is not an immediate second queued request.
+Use the configured shortcut; the default is **left Ctrl + left Shift**. Hold to record and release either key to submit. Wait for the listening state before speaking. The Windows hook tracks configured chord keys and forwards events; another app may also react. Restart after changing remap/toggle settings. It cannot approve a pending action or submit an email paste box. It can answer a spoken general clarification, such as city/country, while preserving the original task. If an existing task is processing, holding is not an immediate second queued request.
 
 A new hold capture suppresses silence/no-speech endpoints while held, but has a 600s chunk bound. An already running ordinary wake/manual capture keeps its original 90s maximum. Reaching a bound can begin processing while still held without hiding the companion.
 
@@ -45,7 +45,7 @@ A new hold capture suppresses silence/no-speech endpoints while held, but has a 
 
 The current endpoint ends capture after **four seconds of silence** following speech; it cannot infer whether you intended to continue. It waits up to ten seconds for initial speech and caps a command at ninety seconds. A three-second pause should normally fit, but low microphone level can make quiet speech resemble silence.
 
-Check distance/input level and the saved transcript before assuming the model ignored words. Recording defaults are in [Configuration](configuration.md). For a longer pause, use global **Ctrl + Shift + Space** hold-to-talk and release to submit. Its held endpoint suppresses the ordinary silence stop; maximum capture bounds still apply.
+Check distance/input level and the saved transcript before assuming the model ignored words. Recording defaults are in [Configuration](configuration.md). For a longer pause, use global **left Ctrl + left Shift** hold-to-talk and release to submit. Its held endpoint suppresses the ordinary silence stop; maximum capture bounds still apply.
 
 ## Transcription gets an app or song name wrong
 

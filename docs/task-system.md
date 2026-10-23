@@ -34,6 +34,8 @@ Schedules persist and are checked once a second while Bilal runs. They resume wh
 
 ## Policy and approvals
 
+For existing signed-in browsers, [window handoff](window-handoff.md) adds an explicit task/window grant instead of attaching the owned Playwright profile to personal logins. A blocked task can request selection, and the desktop/tray menu starts a right-click selector. The worker validates the same native window identity before each action. Gmail search preserves the observed account path and requires visible result evidence. Account-level live acceptance remains pending.
+
 Every production model tool call enters `AgentToolExecutor.execute` and `PolicyGate.decide`. Registered metadata defines risk, mutation, idempotence and relevant path fields. Unknown tools fail closed. Reads from pages, files and windows are untrusted; subsequent mutations require review. Prompt labels remain a defense layer, not proof that every injection attack is solved.
 
 File writes, moves, recycling and restoration require review. Folder access is checked again by `FileTools`; traversal and resolved paths outside selected roots are denied. Known private directories and credential files are excluded from model reads. Existing files have encrypted Windows DPAPI snapshots before replacement. Write/copy checks compare bytes or hashes. Recycle uses the Windows Recycle Bin.

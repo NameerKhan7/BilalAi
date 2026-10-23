@@ -63,6 +63,8 @@ class TaskEngine:
                 self.store.set_state(task_id,'blocked',result=result,error='Waiting for clarification.');self.on_event('task_input',{'task_id':task_id,**result});return
             if result.get('screen_request'):
                 self.store.set_state(task_id,'blocked',result=result,error='Waiting for explicit screen sharing.');self.on_event('task_screen',{'task_id':task_id,**result});return
+            if result.get('window_request'):
+                self.store.set_state(task_id,'blocked',result=result,error='Waiting for the user to hand over the intended window.');self.on_event('task_window',{'task_id':task_id,**result});return
             verified=result.get('ok') is True and result.get('verified') is True
             state='done' if verified else 'failed'
             if not self.store.set_state(task_id,state,result=result,error=None if verified else result.get('error','Completion was not verified.')):return
@@ -89,7 +91,7 @@ class TaskEngine:
         control=self.controls.get(task['id'])
         if control:control.stop()
         self.contexts.get(task['id'],{}).pop('frame',None)
-        self.store.set_state(task['id'],'cancelled');return task['id']
+        self.store.set_state(task['id'],'cancelled');self.on_event('task_revoked',{'task_id':task['id']});return task['id']
     def pause(self,target='last'):
         task=self.resolve_target(target)
         if not task or task['id'] not in self.controls:raise ValueError('No active task to pause.')
@@ -117,6 +119,7 @@ class TaskEngine:
             context=self.contexts.get(task['id'],{});context.pop('frame',None)
             if context.get('literals'):context['literals'].clear()
             self.store.set_state(task['id'],'cancelled')
+            self.on_event('task_revoked',{'task_id':task['id']})
         self.on_event('all_stopped',{'reply':'All tasks stopped.'})
     def status(self):
         tasks=self.store.tasks(['queued','running','paused','waiting_approval','blocked','interrupted'])

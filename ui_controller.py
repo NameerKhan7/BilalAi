@@ -149,7 +149,8 @@ class AssistantController(QObject):
                 except ValueError:pass
             self.cancel_request();self.emit('cancelled',None);return
         if self.runtime:
-            result=self.runtime.submit(text,getattr(self,'literal_vault',None))
+            source=getattr(self,'handoff_from',None);self.handoff_from=None
+            result=self.runtime.submit(text,getattr(self,'literal_vault',None),handoff_from=source) if source else self.runtime.submit(text,getattr(self,'literal_vault',None))
             self.emit('reply',{'text':result['reply'],'verified':True,'queued':bool(result.get('task_id'))})
             return
         if self.cancel_listener:self.cancel_listener.start()
@@ -182,7 +183,8 @@ class AssistantController(QObject):
             from literal_slots import LiteralVault
             self.literal_vault=LiteralVault();value=self.literal_vault.add(value,'Answer to '+question)
             if detail.get('task_id'):
-                self.runtime.store.set_state(detail['task_id'],'cancelled',error='Continued as a new clarification task.')
+                if self.runtime.engine.contexts.get(detail['task_id'],{}).get('grant_token'):self.handoff_from=detail['task_id']
+                else:self.runtime.store.set_state(detail['task_id'],'cancelled',error='Continued as a new clarification task.')
         return 'Original goal: '+detail.get('original_goal','See recent conversation.')+'\nAnswer to your clarification '+repr(question)+': '+value+'\nDo not repeat completed writes. This answer is not sending approval.'
     def collect_wake_examples(self):
         if self.state!='idle' or self.pending_input:return
@@ -202,6 +204,7 @@ class AssistantController(QObject):
         threading.Thread(target=work,daemon=True).start()
     def finish_recording(self): self.stop_capture.set()
     def cancel_request(self,reject_approval=True):
+        self.handoff_from=None
         self.cancel.set();self.stop_capture.set();self.emit('cancelling',None)
         if self.pending_input:
             self.pending_input=None;self.emit('input_cancelled',None)

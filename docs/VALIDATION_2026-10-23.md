@@ -4,6 +4,15 @@
 
 This report records what was actually checked. It is not full acceptance of the 138-capability specification.
 
+## Existing-window handoff follow-up
+
+- The complete regression suite passes **216 tests** after the handoff changes, including 21 handoff tests covering account preservation, evidence requirements, task scope, stale/revoked grants, exclusive window ownership, linked task continuation and the local UI command channel.
+- A real temporary Chrome profile on example.com passed native window binding, accessibility URL/title observation and refusal after revocation. The test closed its own browser and did not access personal accounts. Reproduce with `check_window_handoff.py`; its private local report is under `logs/`.
+- The current-user desktop menu was installed and its fixed launcher command read back. The restarted production app reports `window_handoff: true`, the left Ctrl + left Shift shortcut and a registered hook. The local command successfully opened its handoff dialog.
+- Live university Gmail search, other browsers and physical mixed-DPI selection remain pending. See [the handoff guide](window-handoff.md). These checks do not establish that every desktop app can be automated.
+
+## Earlier foundation checks
+
 | Check | Result | Scope |
 | --- | --- | --- |
 | Final full regression | **195 passed in 22.078 seconds** | Native Windows, simulated providers/external effects where documented |

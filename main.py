@@ -138,7 +138,7 @@ class AssistantWindow(QWidget):
         super().__init__();self.preview=preview;self.visual='idle';self.verified=False;self.speech_pending=False;self.pending_dialog=None;self.input_dialog=None;self.last_wake_sample=None
         self.conversation_enabled=False if conversation_enabled is None else conversation_enabled
         self.hold_started=False;self.hold_background=False
-        self.task_center=None;self.quick_panel=None;self.screen_service=None;self.task_notices=[]
+        self.task_center=None;self.quick_panel=None;self.screen_service=None;self.handoff_dialog=None;self.handoff_server=None;self.task_notices=[]
         self.notice_timer=QTimer(self);self.notice_timer.setInterval(300);self.notice_timer.timeout.connect(self.deliver_task_notice);self.notice_timer.start()
         self.click_timer=QTimer(self);self.click_timer.setSingleShot(True);self.click_timer.timeout.connect(self.avatar_clicked)
         self.conversation=ConversationSession();self.hotkey=None
@@ -200,6 +200,7 @@ class AssistantWindow(QWidget):
             tasks=menu.addAction('Tasks, history and settings');tasks.triggered.connect(self.show_task_center)
             quick=menu.addAction('Paste exact text / quick input');quick.triggered.connect(self.show_quick_input)
             screen=menu.addAction('Ask about a window / point to ask');screen.triggered.connect(self.show_screen_capture)
+            handoff=menu.addAction('Give control of a window to Bilal');handoff.triggered.connect(self.show_window_handoff)
             stop_all=menu.addAction('Stop all background tasks');stop_all.triggered.connect(self.stop_everything)
             wake_action=menu.addAction('Listen for Hey Bilal (acceptance required)');wake_action.setCheckable(True);wake_action.setChecked(self.controller.wake_enabled);wake_action.toggled.connect(self.wake.setChecked)
             self.wake.toggled.connect(wake_action.setChecked)
@@ -229,10 +230,20 @@ class AssistantWindow(QWidget):
         if self.task_center is None:
             from task_center import TaskCenter
             self.task_center=TaskCenter(self.controller.runtime)
+            self.task_center.windowRequested.connect(self.show_window_handoff)
         self.task_center.refresh();self.task_center.show();self.task_center.raise_();self.task_center.activateWindow()
     def stop_everything(self):
         self.cancel_task();self.controller.runtime.stop_all()
         if self.screen_service:self.screen_service.close()
+        if self.handoff_dialog:self.handoff_dialog.reject()
+    def show_window_handoff(self,source_task=None,question=None):
+        if not self.controller or not self.controller.runtime:return
+        if isinstance(source_task,bool):source_task=None
+        if self.handoff_dialog and self.handoff_dialog.isVisible():self.handoff_dialog.raise_();return
+        if self.handoff_dialog and self.handoff_dialog.selector and self.handoff_dialog.selector.isVisible():self.handoff_dialog.selector.raise_();return
+        from window_handoff import WindowHandoff
+        self.handoff_dialog=WindowHandoff(self.controller.runtime,source_task,question,self,on_started=lambda task_id:self.subtitle.setText('Continuing in your selected window.'))
+        self.handoff_dialog.show();self.handoff_dialog.raise_();self.handoff_dialog.activateWindow()
     def show_screen_capture(self,question='What is on this screen?',source_task=None):
         if not self.controller or not self.controller.runtime:return
         if self.screen_service is None:
@@ -248,7 +259,8 @@ class AssistantWindow(QWidget):
     def deliver_task_notice(self):
         if not self.task_notices or not self.controller or self.controller.state!='idle' or self.speech_pending or self.conversation.held or self.pending_dialog or self.input_dialog:return
         name,data=self.task_notices.pop(0)
-        if name=='task_screen':self.show_screen_capture(data['screen_request']['question'],data['task_id'])
+        if name=='task_window':self.show_window_handoff(data['task_id'],data['window_request']['question'])
+        elif name=='task_screen':self.show_screen_capture(data['screen_request']['question'],data['task_id'])
         elif name=='task_approval':
             if data.get('business_approval'):self.show_approval(self.controller.state_store.get(data['approval_id']))
             else:self.show_task_center()
@@ -400,7 +412,7 @@ class AssistantWindow(QWidget):
         self.controller.set_wake(enabled)
         if self.controller.state=='idle':self.set_visual('idle' if enabled else 'inactive','Say “Hey Bilal”, or tap the microphone.' if enabled else 'Tap the microphone whenever you need me.')
     def handle_event(self,name,data):
-        if name in {'task_finished','task_approval','task_input','task_screen','scheduler_failed'}:
+        if name in {'task_finished','task_approval','task_input','task_screen','task_window','scheduler_failed'}:
             if data.get('owner')!='planner':self.task_notices.append((name,data))
             return
         if name=='wake_activated':
@@ -539,7 +551,7 @@ class AssistantWindow(QWidget):
                 'wake_enabled':self.wake.isChecked(),'wake_status':monitor.status if monitor else 'disabled',
                 'wake_guard':'offline_full_phrase','wake_verifier_loaded':bool(monitor and getattr(monitor.verifier,'model',None) is not None),
                 'hold_to_talk':bool(self.hotkey and self.hotkey.available),'conversation_active':self.conversation.active,
-                'task_runtime':bool(self.controller.runtime),'talk_shortcut':list(self.hotkey.keys) if self.hotkey else [],
+                'task_runtime':bool(self.controller.runtime),'window_handoff':bool(self.handoff_server and self.handoff_server.server.isListening()),'talk_shortcut':list(self.hotkey.keys) if self.hotkey else [],
                 'hook_registered':bool(self.hotkey and self.hotkey.hook and self.hotkey.hook.ready.is_set() and not self.hotkey.hook.error)}),encoding='utf-8')
         except OSError:pass
     def quit(self):
@@ -550,6 +562,8 @@ class AssistantWindow(QWidget):
         if self.task_center:self.task_center.close()
         if self.quick_panel:self.quick_panel.close()
         if self.screen_service:self.screen_service.close()
+        if self.handoff_dialog:self.handoff_dialog.reject()
+        if self.handoff_server:self.handoff_server.close()
         if self.hotkey:self.hotkey.stop()
         if hasattr(self,'stop_hotkey'):self.stop_hotkey.stop()
         self.character.timer.stop()
@@ -562,13 +576,16 @@ class AssistantWindow(QWidget):
         QTimer.singleShot(200,QApplication.quit)
 
 def main():
-    parser=argparse.ArgumentParser();parser.add_argument('--preview-all',action='store_true');args=parser.parse_args()
+    parser=argparse.ArgumentParser();parser.add_argument('--preview-all',action='store_true');parser.add_argument('--handoff',action='store_true');args=parser.parse_args()
     if args.preview_all:os.environ['QT_QPA_PLATFORM']='offscreen'
     app=QApplication(sys.argv[:1]);app.setQuitOnLastWindowClosed(False)
     if not args.preview_all:
         (ROOT/'logs').mkdir(exist_ok=True)
         app_lock=QLockFile(str(ROOT/'logs/bilal_ui.lock'))
         if not app_lock.tryLock(0):
+            if args.handoff:
+                from handoff_ipc import request_handoff
+                if request_handoff():return
             print('Bilal is already running. Open it from the system tray.');return
     # Offscreen previews also need explicit access to Windows' native fonts.
     for name in ['segoeui.ttf','seguisb.ttf','segoeuib.ttf']:
@@ -591,6 +608,9 @@ def main():
         window.show_center();window.setWindowOpacity(1);app.processEvents();window.grab().save(str(output/'result.png'))
         print('Rendered eight UI states and a result preview in ui_preview/.');return
     window.hide()  # Wake monitoring and the tray remain active while the avatar is hidden.
+    from handoff_ipc import HandoffServer
+    window.handoff_server=HandoffServer(window.show_window_handoff,window)
+    if args.handoff:QTimer.singleShot(300,window.show_window_handoff)
     QTimer.singleShot(2000,window.save_runtime_status)
     run_ui(app,window)
 

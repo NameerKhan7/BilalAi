@@ -13,6 +13,9 @@ from web_reader import read_webpage
 from memory import LocalState
 from research_tools import web_search,prayer_times
 
+# Different queued tasks must not send desktop input at the same time.
+DESKTOP_INPUT_LOCK=threading.Lock()
+
 def declaration(name, description, properties, required=()):
     return types.FunctionDeclaration(name=name, description=description,
         parameters_json_schema={'type':'object','properties':properties,
@@ -31,6 +34,9 @@ TOOL_DECLARATIONS=[
     declaration('enter_text','Set an observed Edit or ComboBox value using accessibility. Text is literal; no terminal, login or password fields. Inspect again to check the result.',{'control_id':S,'text':S},['control_id','text']),
     declaration('spotify_play','Search and play a song on Spotify, verifying its actual track title. Resolve likely transcription errors from the user goal and artist, without inventing a certainty. Use query containing song and artist, e.g. Blinding Lights The Weeknd.',{'query':S},['query']),
     declaration('media_status','Read actual Spotify playback status and current title/artist.',{}),
+    declaration('selected_browser_state','Read the exact existing browser/tab explicitly handed over by the human. Includes actual URL, title and visible accessibility text. No cookie extraction.',{}),
+    declaration('selected_browser_open_gmail','Open Gmail inside the handed-over browser window, preserving its existing login/profile. Never signs in or creates a separate browser profile.',{}),
+    declaration('selected_gmail_search','Search Gmail in the human-selected existing tab. Preserves the observed account index and checks actual visible search results. Query is intent, not a sentence pattern.',{'query':S},['query']),
     declaration('media_control','Play, pause, skip next or previous in Spotify and observe the resulting playback state.',{'action':{'type':'string','enum':['play','pause','next','previous']}},['action']),
     declaration('system_volume','Set Windows speaker volume to a percentage between 0 and 100 and read it back.',{'percent':S},['percent']),
     declaration('window_action','Focus, minimize, maximize, restore, snap left/right, or request closing an observed window. Close requires human review.',{'window_id':S,'action':{'type':'string','enum':['focus','minimize','maximize','restore','left','right','close']}},['window_id','action']),
@@ -95,7 +101,7 @@ class DesktopBridge:
             process.wait(timeout=3)
 
 class AgentToolExecutor:
-    def __init__(self,browser=None,spotify_player=None,desktop=None,state=None,business=None,policy=None,context=None,capabilities=None,control=None,dom=None):
+    def __init__(self,browser=None,spotify_player=None,desktop=None,state=None,business=None,policy=None,context=None,capabilities=None,control=None,dom=None,keep_desktop=False):
         self.browser=browser or BrowserTools()
         self.spotify_player=spotify_player or play_spotify
         self.desktop=desktop or DesktopBridge()
@@ -104,6 +110,7 @@ class AgentToolExecutor:
         self.business=business or BusinessWorkflows(self.state)
         self.policy=policy;self.context=context;self.capabilities=capabilities;self.control=control
         self.dom=dom
+        self.keep_desktop=keep_desktop
     def execute(self,name,args,cancel_event=None):
         if self.control:self.control.checkpoint()
         from tool_policy import LEGACY_SPECS
@@ -166,6 +173,9 @@ class AgentToolExecutor:
                 if detail['field']=='email':detail['question']='Please enter the email address.'
                 return {'ok':True,'input_request':detail,'reply':detail['question']}
             if name=='open_url':
+                from urllib.parse import urlparse
+                if self.policy and urlparse(args['url']).hostname in {'mail.google.com','gmail.com','www.gmail.com'}:
+                    return {'ok':False,'verified':False,'window_request':{'question':'Open the browser and Gmail account you want me to use, then give that window to Bilal.'},'reply':'I need your intended browser/account before opening or searching Gmail. No inbox search has happened.'}
                 opened=self.browser.open_url(args['url']);return {'ok':True,'verified':False,'url':opened.url,'reply':opened.reply}
             if name=='read_webpage':return read_webpage(args['url'],start=args.get('start','0'))
             if name=='propose_memory':return self.business.propose_memory(**args)
@@ -185,5 +195,11 @@ class AgentToolExecutor:
             action='web_search' if name=='browser_search' else 'open_site'
             result=self.browser.execute(CommandDecision(action=action,site=args['site'],query=args.get('query','')))
             return {'ok':True,'reply':result.reply,'url':result.url,'verified':False}
-        return self.desktop.call(name,args,cancel_event)
-    def close(self): self.desktop.close()
+        while not DESKTOP_INPUT_LOCK.acquire(timeout=.1):
+            if cancel_event is not None and cancel_event.is_set():
+                from request_router import RequestCancelled
+                raise RequestCancelled('Cancelled while waiting for desktop access.')
+        try:return self.desktop.call(name,args,cancel_event)
+        finally:DESKTOP_INPUT_LOCK.release()
+    def close(self):
+        if not self.keep_desktop:self.desktop.close()

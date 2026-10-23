@@ -59,7 +59,7 @@ Quit any previous instance from its tray menu and launch the updated app. Record
 | “hey” alone, “hee haa,” or similar non-trigger sounds | No activation. |
 | Full “Hey Bilal” followed immediately by a harmless question | Activation, first words preserved, complete answer aloud, then hidden without automatic follow-up capture. |
 | After a reply, speak without wake/hold/manual activation | No automatic new command recording. |
-| Hold Ctrl + Shift + Space, pause over4s, continue, then release | Capture survives the thinking pause; release submits once and hides immediately; background processing/audio continue without reopening the mic. |
+| Hold left Ctrl + left Shift, pause over4s, continue, then release | Capture survives the thinking pause; release submits once and hides immediately; background processing/audio continue without reopening the mic. |
 | Hold/release during TTS, input, or approval | No self-recorded reply; no shortcut submission or approval of dialogs; no duplicate capture. |
 | Dictated request with a three-second thinking pause | Command continues across the pause. A pause over four seconds may end capture by design. |
 | Missing city/country | Spoken clarification with no text dialog; hold-to-talk or verified wake answer resumes the original lookup. |
@@ -167,7 +167,7 @@ Evidence recorded by the implementation work:
 Use these additional deliberate acceptance checks:
 
 1. Confirm wake is off on a fresh/default launch and cannot be enabled without the fresh independent acceptance gate. The gate needs50 positive trials with at least 90% true activations and one hour of negatives with fewer than one false activation/hour, dated within 30 days.
-2. Hold the default **Ctrl+Shift+Space**, speak, release, and expect one queued task with immediate avatar hiding. Test Settings remapping/toggle after restart. Verify **Ctrl+Alt+Backspace** stops pending/running work and capture without claiming rollback of completed effects.
+2. Hold the default **left Ctrl + left Shift**, speak, release, and expect one queued task with immediate avatar hiding. Test Settings remapping/toggle after restart. Verify **Ctrl+Alt+Backspace** stops pending/running work and capture without claiming rollback of completed effects.
 3. Queue another harmless request while earlier task work runs. Inspect durable task state, steps, artifacts, cancellation, interrupted recovery, and exact reviewed-step continuation. Resume must not rerun unrelated completed writes.
 4. Put an exact non-secret payload in Quick Input, reference it in an instruction, and verify byte-preserving output and stored non-secret snippet behavior. For a secret fixture, verify model context/history/artifacts use masked slots and no reusable plaintext snippet is created. Use test values, never real credentials in test output.
 5. In dry-run, confirm no backend mutation. Exercise out-of-root paths, private directories, stale approvals, changed exact arguments, and secret-bearing/`.env` L2 approvals with fixtures. Verify controlled-write readback and version restoration within an allowed test folder.

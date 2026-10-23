@@ -26,6 +26,7 @@ class ToolContext:
     dry_run:bool=False
     capture_requested:bool=False
     force_review:bool=False
+    window_target:dict|None=None
     literals:LiteralVault=field(default_factory=LiteralVault)
 
 
@@ -67,6 +68,9 @@ class PolicyGate:
             db.execute('UPDATE tool_approvals SET plan=?,digest=?,state=? WHERE id=?',(json.dumps(plan),self.fingerprint(plan),'approved' if plan else 'consumed',approval_id))
         self.store.audit('approval.consumed',{'approval_id':approval_id,'call':call},task_id);return True
     def decide(self,spec,args,context):
+        if context.window_target and spec.name not in {'request_window_handoff','request_input','task_status','list_windows','inspect_window','activate_control','enter_text','window_action','selected_browser_state','selected_browser_open_gmail','selected_gmail_search'}:
+            self.store.audit('policy.denied',{'tool':spec.name,'reason':'outside handed-over window scope'},context.task_id)
+            return {'ok':False,'verified':False,'error':'This task is limited to the handed-over window. Use selected-browser or observed window tools; do not open another browser/profile or use another account connector.'}
         call={'tool':spec.name,'args':context.literals.mask(args)}
         resolved=context.literals.resolve(args)
         level=spec.level
@@ -108,5 +112,6 @@ LEGACY_SPECS['window_action']=ToolSpec('window_action',level=1,mutates=True)
 LEGACY_SPECS['clipboard_read']=ToolSpec('clipboard_read',idempotent=True)
 LEGACY_SPECS['clipboard_write']=ToolSpec('clipboard_write',level=1,mutates=True)
 for name in ('media_control','system_volume'):LEGACY_SPECS[name]=ToolSpec(name,mutates=True)
+for name in ('selected_browser_state','selected_browser_open_gmail','selected_gmail_search'):LEGACY_SPECS[name]=ToolSpec(name,idempotent=True)
 for name in ('browser_tabs','browser_read'):LEGACY_SPECS[name]=ToolSpec(name,idempotent=True,external=True)
 for name in ('browser_open','browser_fill','browser_click'):LEGACY_SPECS[name]=ToolSpec(name,level=1,mutates=True,external=True)

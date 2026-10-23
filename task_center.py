@@ -1,10 +1,11 @@
 """Local task review, artifact search, policy approvals and folder settings."""
 import json
-from PySide6.QtCore import QTimer
+from PySide6.QtCore import QTimer,Signal
 from PySide6.QtWidgets import (QDialog,QVBoxLayout,QHBoxLayout,QTabWidget,QListWidget,QTextBrowser,QLineEdit,QPushButton,QFileDialog,QCheckBox,QInputDialog,QMessageBox,QLabel)
 
 
 class TaskCenter(QDialog):
+    windowRequested=Signal(str)
     def __init__(self,runtime,parent=None):
         super().__init__(parent);self.runtime=runtime;self.setWindowTitle('Bilal AI — Tasks and history');self.resize(760,570)
         from ui_styles import DIALOG_STYLE
@@ -14,6 +15,7 @@ class TaskCenter(QDialog):
         self.tasks.currentRowChanged.connect(self.select);buttons=QHBoxLayout()
         for label,action in [('Pause','pause'),('Resume','resume'),('Cancel','cancel')]:
             button=QPushButton(label);button.clicked.connect(lambda checked=False,a=action:self.control(a));buttons.addWidget(button)
+        target=QPushButton('Choose window and continue');target.clicked.connect(self.choose_window);buttons.addWidget(target)
         stop=QPushButton('Stop all');stop.clicked.connect(runtime.stop_all);buttons.addWidget(stop);body.addLayout(buttons);tabs.addTab(tasks,'Tasks')
         history=QDialog();history_body=QVBoxLayout(history);self.search=QLineEdit();self.search.setPlaceholderText('Search saved answers, drafts and agent output');history_body.addWidget(self.search);self.results=QListWidget();history_body.addWidget(self.results);self.artifact=QTextBrowser();self.artifact.setOpenExternalLinks(False);history_body.addWidget(self.artifact)
         self.search.returnPressed.connect(self.find);self.results.currentRowChanged.connect(self.read_artifact);tabs.addTab(history,'History')
@@ -59,6 +61,9 @@ class TaskCenter(QDialog):
             row=self.tasks.currentRow()
             if row>=0:getattr(self.runtime.engine,action)(self.rows[row]['id']);self.refresh()
         except (ValueError,RuntimeError) as exc:QMessageBox.information(self,'Task',str(exc))
+    def choose_window(self):
+        index=self.tasks.currentRow()
+        if 0<=index<len(self.rows):self.windowRequested.emit(self.rows[index]['id'])
     def find(self):
         self.artifacts=self.runtime.store.search(self.search.text());self.results.clear();self.results.addItems([x['title']+' · '+x['id'] for x in self.artifacts])
     def read_artifact(self,index):
