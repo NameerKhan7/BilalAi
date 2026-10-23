@@ -81,7 +81,7 @@ If speech was interrupted, check whether a cancellation or another UI interactio
 
 ## The missing-detail box is waiting
 
-For an email address, paste the requested detail and press **Enter** or **Continue**. For a general spoken question, hold the configured talk shortcut (default Ctrl+Shift+Space), say the answer, and release; no text popup is expected. The current input is single-line, limited to 2,000 characters. An email request requires a complete address; a person's name alone is insufficient. Cancel or Escape ends this pending continuation.
+For an email address, paste the requested detail and press **Enter** or **Continue**. For a general spoken question, hold the configured talk shortcut (default Ctrl+Shift), say the answer, and release; no text popup is expected. The current input is single-line, limited to 2,000 characters. An email request requires a complete address; a person's name alone is insufficient. Cancel or Escape ends this pending continuation.
 
 Providing an address resumes draft preparation. It does not approve sending; the exact email must still be reviewed separately.
 

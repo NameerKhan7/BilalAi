@@ -57,7 +57,7 @@ Tools return evidence, errors, or pending work. A launch result with `verified: 
 ## One voice request, end to end
 
 1. `main.py` creates the Qt application, single-instance lock, controller, companion and tray. The companion starts hidden.
-2. Default activation is the configurable left Ctrl+Shift+Space hold chord. Wake monitoring is off until fresh independent acceptance passes. When enabled, `WakeMonitor` reads 80 ms audio blocks, applies the candidate gate and then requires full local phrase verification.
+2. Default activation is the configurable left Ctrl+Shift hold chord. Wake monitoring is off until fresh independent acceptance passes. When enabled, `WakeMonitor` reads 80 ms audio blocks, applies the candidate gate and then requires full local phrase verification.
 3. A candidate includes recent audio plus short lookahead. `OfflineWakeVerifier` checks it in a background thread while the microphone continues buffering.
 4. Only an accepted candidate produces a callback containing `phrase_verified=True`. The controller rejects stale, disabled or unverified callbacks.
 5. Command capture reuses that microphone stream and buffered audio. It stops after configured silence, a user stop, or the maximum recording time.
@@ -72,7 +72,7 @@ See [configuration](configuration.md) for the current audio and wake constants. 
 
 `AssistantWindow.conversation_enabled` defaults to `False`. The internal `ConversationSession` and 15s follow-up mode remain available to tests/explicit code configuration, but are not the default listening behavior. Each ordinary new voice turn requires wake, manual capture, or hold-to-talk.
 
-`HoldToTalk` uses a small Windows low-level keyboard hook on its own thread. It tracks configured chord keys only, does not log typing and rejects injected activation. The 25ms polling path remains for injected test backends. The default chord is left Ctrl+Shift+Space; modifier-only Ctrl+Shift and toggle mode are Settings options applied after restart. Release finishes capture and hides the companion immediately. Double-click opens exact input; a deferred single click avoids starting capture during that gesture.
+`HoldToTalk` uses a small Windows low-level keyboard hook on its own thread. It tracks configured chord keys only, does not log typing and rejects injected activation. The 25ms polling path remains for injected test backends. The default chord is left Ctrl+Shift; modifier-only Ctrl+Shift and toggle mode are Settings options applied after restart. Release finishes capture and hides the companion immediately. Double-click opens exact input; a deferred single click avoids starting capture during that gesture.
 
 `CommandEndpoint.feed(..., held=True)` suppresses silence/no-speech endpoints but retains the duration bound. New hold and spoken-clarification captures use 600s; an existing ordinary wake/manual capture retains 90s. Reaching the bound can process a chunk before release. This does not enable unlimited continuous recording.
 

@@ -87,7 +87,7 @@
         }
       ],
       "remaining_gate": "Run the specified acceptance and record dated evidence; baseline partial tests are insufficient.",
-      "implementation_note": "Hook-based global talk activation defaults to Ctrl+Shift+Space; settings persist remapped chords/hold-toggle mode (restart to apply). No 50-trial physical activation result."
+      "implementation_note": "Hook-based global talk activation defaults to Ctrl+Shift; settings persist remapped chords/hold-toggle mode (restart to apply). No 50-trial physical activation result."
     },
     {
       "id": "VOI-2",
@@ -2853,7 +2853,7 @@
         }
       ],
       "remaining_gate": "Run the specified acceptance and record dated evidence; baseline partial tests are insufficient.",
-      "implementation_note": "Hook-based configured chord defaults to left Ctrl+Shift+Space; Settings changes persist and apply after restart. Registration/remap behavior needs physical acceptance."
+      "implementation_note": "Hook-based configured chord defaults to left Ctrl+Shift; Settings changes persist and apply after restart. Registration/remap behavior needs physical acceptance."
     },
     {
       "id": "HOT-2",

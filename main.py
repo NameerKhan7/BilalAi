@@ -214,13 +214,13 @@ class AssistantWindow(QWidget):
             self.tray.setContextMenu(menu);self.tray.setToolTip('Bilal AI — your desktop companion')
             self.tray.activated.connect(lambda reason:self.show_requested() if reason==QSystemTrayIcon.ActivationReason.Trigger else None)
             self.tray.show()
-            shortcut=self.controller.runtime.store.setting('talk_shortcut',{'keys':[0xA2,0xA0,0x20],'toggle':False})
+            shortcut=self.controller.runtime.store.setting('talk_shortcut',{'keys':[0xA2,0xA0],'toggle':False})
             self.hotkey=HoldToTalk(self,keys=shortcut['keys'],toggle=shortcut.get('toggle',False));self.hotkey.changed.connect(self.hold_changed)
             self.stop_hotkey=HoldToTalk(self,keys=[0xA2,0xA4,0x08]);self.stop_hotkey.changed.connect(lambda held:self.stop_everything() if held else None)
             try:self.hotkey.start();self.stop_hotkey.start()
             except RuntimeError as exc:self.subtitle.setText(str(exc))
         self.drag=None;self.moved=False
-        self.setToolTip('Hold left Ctrl + left Shift + Space to talk (configurable). Double-click to paste exact text. Right-click for controls.')
+        self.setToolTip('Hold left Ctrl + left Shift to talk (configurable). Double-click to paste exact text. Right-click for controls.')
     def begin_conversation(self):
         if not self.conversation_enabled:return
         self.conversation.begin();self.controller.conversation_active=True;self.turn_timer.stop()

@@ -2,7 +2,7 @@
 
 [Documentation](README.md) · [Project overview](../README.md) · [Feature reference](features.md) · [Field acceptance](FIELD_ACCEPTANCE.md)
 
-Bilal is an experimental Windows agent with background tasks and local tools. Hold **left Ctrl + left Shift + Space**, speak, and release to submit. You can inspect work, saved answers and approvals from **Tasks, history and settings** in the tray.
+Bilal is an experimental Windows agent with background tasks and local tools. Hold **left Ctrl + left Shift**, speak, and release to submit. You can inspect work, saved answers and approvals from **Tasks, history and settings** in the tray.
 
 **This build does not complete the full 138-capability target.** Check [current implementation/acceptance status](CAPABILITY_STATUS.md) and the [target spec](CAPABILITY_SPEC.md). Wake defaults off until independent acceptance passes. Gmail/Notion live account tests remain pending by choice; external-agent writing is not available.
 
@@ -22,7 +22,7 @@ To exit completely, use **Quit Bilal**. Hiding/closing the companion leaves the 
 
 ## 2. Give a spoken request
 
-Hold **left Ctrl + left Shift + Space**, wait for listening, say “Explain the difference between a website and a web app,” then release. No wake phrase is needed. The companion hides on release while the request is transcribed and queued; spoken output can continue in the background. You can give more work while queued tasks run.
+Hold **left Ctrl + left Shift**, wait for listening, say “Explain the difference between a website and a web app,” then release. No wake phrase is needed. The companion hides on release while the request is transcribed and queued; spoken output can continue in the background. You can give more work while queued tasks run.
 
 Automatic full-command follow-up capture is off. Start each turn explicitly. General clarification can be answered using the same held shortcut; an email-address question opens a paste box. A new hold capture allows thinking pauses without silence stopping it, but has a 600-second chunk bound. Ordinary manual/wake capture still has four-second silence and 90-second limits.
 
@@ -34,7 +34,7 @@ After accepted activation is enabled, use the full “Hey Bilal” phrase with y
 
 ## 3. Hold to talk, record manually, or type
 
-Hold **left Ctrl + left Shift + Space** from another app or the desktop, wait for the listening state, and speak. Release any key in the chord to submit and hide the companion immediately. Processing and the spoken answer can continue in the background; release does not cancel the task. While held, a new hold capture does not stop for a thinking pause or an initial no-speech timeout. It has a 600-second chunk bound; processing that chunk can begin before release, while the companion stays visible. This is a bound, not unlimited dictation. The global hook tracks configured shortcut keys, forwards keystrokes, ignores injected keys and does not log typed text. Other apps can still react to the shortcut. Change it or choose toggle mode in Task Center Settings, then restart. Left Ctrl + left Shift alone is an opt-in setting.
+Hold **left Ctrl + left Shift** from another app or the desktop, wait for the listening state, and speak. Release any key in the chord to submit and hide the companion immediately. Processing and the spoken answer can continue in the background; release does not cancel the task. While held, a new hold capture does not stop for a thinking pause or an initial no-speech timeout. It has a 600-second chunk bound; processing that chunk can begin before release, while the companion stays visible. This is a bound, not unlimited dictation. The global hook tracks configured shortcut keys, forwards keystrokes, ignores injected keys and does not log typed text. Other apps can still react to the shortcut. Change it or choose toggle mode in Task Center Settings, then restart. Left Ctrl + left Shift alone is an opt-in setting.
 
 The shortcut never approves an action or submits an email-address dialog. It can record an answer to a spoken general clarification while preserving the pending task. Holding during spoken output interrupts speech before a new capture can start; it is not simultaneous recording of Bilal’s own reply. If work is already processing, the hold does not cancel its completed actions or guarantee a second immediate recording.
 
@@ -46,7 +46,7 @@ If automatic activation is unavailable:
 
 For typed input, choose **Read reply / type a request**, enter the request, and send. This bypasses microphone recognition and helps distinguish a transcription problem from task execution.
 
-Double-click the avatar for Quick Input. Click an idle visible companion to start recording; clicks during processing or speech are ignored. Use the tray recording control or hold-key release to finish capture; drag to reposition it; right-click for controls. Space controls recording when the companion has focus and the request input does not. The separate left Ctrl + left Shift + Space shortcut is global; Space remains a focused-window control.
+Double-click the avatar for Quick Input. Click an idle visible companion to start recording; clicks during processing or speech are ignored. Use the tray recording control or hold-key release to finish capture; drag to reposition it; right-click for controls. Space controls recording when the companion has focus and the request input does not. The separate left Ctrl + left Shift shortcut is global; Space remains a focused-window control.
 
 ## 4. Read the character states
 
@@ -96,7 +96,7 @@ You can dictate content before providing every field:
 4. Bilal continues using the content already given.
 5. Review the actual draft before approving or rejecting sending.
 
-For a general question such as “Which city and country?”, no text dialog appears: hold left Ctrl + left Shift + Space, say the answer, and release, or, after wake acceptance, say “Hey Bilal” followed by the answer. Bilal resumes the original task rather than treating the city as an unrelated request.
+For a general question such as “Which city and country?”, no text dialog appears: hold left Ctrl + left Shift, say the answer, and release, or, after wake acceptance, say “Hey Bilal” followed by the answer. Bilal resumes the original task rather than treating the city as an unrelated request.
 
 Invalid email input stays visible with a validation message. Correct it or cancel. Supported text fields accept up to 2,000 characters. Use this box for requested details, not passwords or API keys.
 

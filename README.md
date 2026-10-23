@@ -20,7 +20,7 @@
 
 ---
 
-Bilal is an experimental **Windows LLM agent with local tools and a durable task queue**. Hold **left Ctrl + left Shift + Space**, speak, and release to submit. You can give another task while earlier work runs, inspect saved results, and review sensitive steps before execution. Automatic follow-up recording is off.
+Bilal is an experimental **Windows LLM agent with local tools and a durable task queue**. Hold **left Ctrl + left Shift**, speak, and release to submit. You can give another task while earlier work runs, inspect saved results, and review sensitive steps before execution. Automatic follow-up recording is off.
 
 > **Build status:** This is a capability foundation, not the completed 138-capability product. Read the [current capability status and known blockers](docs/CAPABILITY_STATUS.md) alongside the [full capability specification](docs/CAPABILITY_SPEC.md). Source implementation, automated tests, and physical/live acceptance are separate evidence.
 
@@ -57,7 +57,7 @@ You can dictate an email before providing the recipient:
 4. **Bilal:** Continues with the content you already dictated and prepares the draft.
 5. **You:** Review the recipient, subject, and body, then approve or reject sending.
 
-The input box appears for an email address and closes after submission or cancellation. General details such as a city are asked aloud; hold left Ctrl + left Shift + Space (or use wake after acceptance) with the answer to continue the original task. Providing an address does **not** approve sending.
+The input box appears for an email address and closes after submission or cancellation. General details such as a city are asked aloud; hold left Ctrl + left Shift (or use wake after acceptance) with the answer to continue the original task. Providing an address does **not** approve sending.
 
 ## Quick start
 
@@ -116,7 +116,7 @@ This downloads a roughly **145 MB** speech model plus supporting files into `mod
 .\venv\Scripts\python.exe .\main.py
 ```
 
-Bilal starts **hidden**, with a system tray icon. Hold **left Ctrl + left Shift + Space**, say “Open Spotify,” and release. There is no wake phrase requirement for this recording. Quit an existing tray instance before starting an update.
+Bilal starts **hidden**, with a system tray icon. Hold **left Ctrl + left Shift**, say “Open Spotify,” and release. There is no wake phrase requirement for this recording. Quit an existing tray instance before starting an update.
 
 Use **Tasks, history and settings → Settings** to store provider keys in Windows Credential Manager. Legacy `.env` keys remain supported; the Settings migration action verifies encrypted copies before clearing migrated values from `.env`. Add `ANTHROPIC_API_KEY` there only if you want to use the installed Claude adapter; subscription sign-in alone is not sufficient for its bare mode.
 
@@ -124,7 +124,7 @@ Use **Tasks, history and settings → Settings** to store provider keys in Windo
 
 | Action | Control |
 | --- | --- |
-| Hold to talk globally | **Left Ctrl + left Shift + Space**; release to submit |
+| Hold to talk globally | **left Ctrl + left Shift**; release to submit |
 | Change shortcut / toggle mode | **Tasks, history and settings → Settings**, then restart; left Ctrl + left Shift alone is opt-in |
 | Stop all work | **Left Ctrl + left Alt + Backspace**, or **Stop all background tasks** |
 | Exact pasted input | Double-click the avatar, or **Paste exact text / quick input** |
@@ -342,7 +342,7 @@ This renders the eight character states without microphone or API usage. Images 
 | “Bilal is already running” | Use the existing tray instance; quit it before restarting an update. |
 | Wake activation is unavailable | Expected until independent acceptance passes; use hold-to-talk. The offline model is also needed after acceptance. |
 | A video triggers the companion | Check whether it contained the full phrase; mark false activations from the tray and follow the background-playback test guide. |
-| Recording ends while thinking | Ordinary capture ends after four seconds of silence. Use left Ctrl + left Shift + Space hold-to-talk for longer thinking pauses, releasing to submit. |
+| Recording ends while thinking | Ordinary capture ends after four seconds of silence. Use left Ctrl + left Shift hold-to-talk for longer thinking pauses, releasing to submit. |
 | No audible reply | Enable **Speak replies**, check the default output device, and check installed Windows voices. |
 | Gmail or Notion is unavailable | Complete Bilal's standalone account setup and page permissions. |
 | A task fails or claims the wrong outcome | Inspect its state, steps, error and artifacts in **Tasks, history and settings**; redact private data before sharing. |

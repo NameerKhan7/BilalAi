@@ -10,13 +10,13 @@ Bilal AI is a Windows LLM agent with local tools. Gemini chooses available tools
 
 | Area | Implemented behavior | Main boundary |
 | --- | --- | --- |
-| Activation | Global left Ctrl + left Shift + Space hold/release; gated optional wake | Wake defaults off without fresh independent acceptance |
+| Activation | Global left Ctrl + left Shift hold/release; gated optional wake | Wake defaults off without fresh independent acceptance |
 | Tasks | Three workers, dependencies, persisted steps/results/history, in-app schedules | Physical/live acceptance and full-goal verification remain incomplete |
 | Exact input | Quick Input with locally resolved literal slots | Secret slots expire; heuristic detection is incomplete |
 | Files | Allowed-folder reading/search and reviewed file effects with versions | No arbitrary filesystem access or shell executor |
 | Screen questions | Explicit picker/indicator and answer-only vision | 20/day; pointer/secure-desktop edge cases unaccepted |
 | Delegation | Restricted read-only Codex/Claude CLI adapters | Codex local live passed; Claude key/live test pending; no write mode |
-| Recording | Silence-ended wake/manual capture or global left Ctrl + left Shift + Space hold/release | Ordinary limit 90s; new hold/clarification captures bounded 600s |
+| Recording | Silence-ended wake/manual capture or global left Ctrl + left Shift hold/release | Ordinary limit 90s; new hold/clarification captures bounded 600s |
 | Conversation | Gemini answers and selects tools; explicit activation for each new voice turn by default | Automatic follow-up capture is disabled |
 | Desktop | Discover apps/windows, inspect and operate accessible controls | Coverage depends on Windows accessibility support |
 | Music | Search Spotify, attempt playback, verify actual media status | Spotify must be installed and usable |
@@ -30,7 +30,7 @@ Bilal AI is a Windows LLM agent with local tools. Gemini chooses available tools
 
 ## 1. Activation and false-trigger prevention
 
-Default production activation is **left Ctrl + left Shift + Space** held while speaking. The Settings dialog can change the chord or use toggle mode; restart to apply. Left Ctrl + left Shift alone is opt-in. The global keyboard hook tracks configured keys, forwards typing to other apps, and ignores injected keystrokes. It does not record typed text.
+Default production activation is **left Ctrl + left Shift** held while speaking. The Settings dialog can change the chord or use toggle mode; restart to apply. Left Ctrl + left Shift alone is opt-in. The global keyboard hook tracks configured keys, forwards typing to other apps, and ignores injected keystrokes. It does not record typed text.
 
 Wake defaults off unless `data/wake_acceptance.json` records independent evidence no older than 30 days: at least 50 positive trials with at least 90% true activation, at least 3,600 negative seconds, and fewer than one false activation per hour. Installing/training a model does not unlock it. An absent/stale/failed report keeps it disabled.
 
@@ -65,7 +65,7 @@ Capture runs locally until detected silence, manual finish, cancellation, or a l
 
 Wake capture reuses the microphone stream and buffered audio without restarting calibration. The initial wait is not ten additional seconds after the popup appears. Timings are code defaults, not exposed user settings.
 
-A new hold capture starts through global **left Ctrl + left Shift + Space**. Keeping the keys held suppresses silence/no-speech endpoints; release sends the captured utterance. New hold and clarification captures have a 600-second chunk bound. Hitting the bound processes the chunk and does not hide the UI while held. Ordinary wake/manual capture retains the defaults above. The global hook tracks the configured chord, forwards keystrokes, and does not record typed text.
+A new hold capture starts through global **left Ctrl + left Shift**. Keeping the keys held suppresses silence/no-speech endpoints; release sends the captured utterance. New hold and clarification captures have a 600-second chunk bound. Hitting the bound processes the chunk and does not hide the UI while held. Ordinary wake/manual capture retains the defaults above. The global hook tracks the configured chord, forwards keystrokes, and does not record typed text.
 
 Releasing hold-to-talk hides the companion immediately and ends the active session, while the task and audio reply may continue in the background. There is no automatic recording after the reply in the default build. Existing internal 15s follow-up support is dormant unless explicitly enabled in code. Captured commands and spoken clarifications go to Groq. Command audio and transcripts are saved under ignored `recordings/`. Production background answers are task artifacts in the local database; the legacy synchronous path also writes `.answer.txt` files. Typed requests bypass capture and transcription. Recognition can mishear names, mixed languages, quiet speech, and song titles; contextual interpretation does not guarantee the intended meaning.
 

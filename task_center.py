@@ -111,7 +111,7 @@ class TaskCenter(QDialog):
         count,ok=QInputDialog.getInt(self,'Background tasks','Concurrent workers:',self.runtime.store.setting('task_concurrency',3),1,8)
         if ok:self.runtime.store.set_setting('task_concurrency',count)
     def change_toggle(self,toggle):
-        value=self.runtime.store.setting('talk_shortcut',{'keys':[0xA2,0xA0,0x20]});value['toggle']=toggle;self.runtime.store.set_setting('talk_shortcut',value)
+        value=self.runtime.store.setting('talk_shortcut',{'keys':[0xA2,0xA0]});value['toggle']=toggle;self.runtime.store.set_setting('talk_shortcut',value)
     def change_domains(self):
         from urllib.parse import urlparse
         text,ok=QInputDialog.getText(self,'Browser domains','Exact hostnames, comma separated (no wildcard):',text=', '.join(self.runtime.store.setting('allowed_domains',[])))
