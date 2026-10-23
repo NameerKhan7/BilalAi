@@ -20,16 +20,22 @@
 
 ---
 
-Bilal combines voice input, an LLM agent, and tools that operate on your PC. Say **“Hey Bilal”** to bring up a small animated companion, speak your request, and hear the reply. The companion hides after the reply. Automatic follow-up listening is disabled by default; use the wake phrase, hold-to-talk, or manual input for each new turn.
+Bilal is an experimental **Windows LLM agent with local tools and a durable task queue**. Hold **left Ctrl + left Shift + Space**, speak, and release to submit. You can give another task while earlier work runs, inspect saved results, and review sensitive steps before execution. Automatic follow-up recording is off.
 
-When something is missing, Bilal asks. When an email is ready to send or a power action is requested, it waits for your confirmation.
+> **Build status:** This is a capability foundation, not the completed 138-capability product. Read the [current capability status and known blockers](docs/CAPABILITY_STATUS.md) alongside the [full capability specification](docs/CAPABILITY_SPEC.md). Source implementation, automated tests, and physical/live acceptance are separate evidence.
 
-> **Project status:** Experimental and under active development. Desktop control depends on each app's accessibility support. Gmail and Notion workflows are implemented, but live account acceptance remains pending. Wake detection still needs testing in everyday conditions.
+**Wake activation defaults off** in production until a fresh independent acceptance report passes its gates. Use hold-to-talk or typed input meanwhile. Gmail/Notion live account tests remain pending by user choice. Read-only Codex delegation has passed a local live check; Claude's official CLI 2.1.309 is installed locally, but its API-key setup and live authenticated test remain pending. No external agent has write access.
 
 ## What Bilal can do
 
 | Capability | Example request | What to expect |
 | --- | --- | --- |
+| Background tasks | “Summarize this, then prepare a draft.” | Structured planning, up to three workers, persisted task states and results; live multi-command acceptance remains pending. |
+| Exact pasted text | Double-click the avatar, paste, then describe the task. | Local literal slots keep payload separate from model-written instructions. |
+| Files | “Save this exact text in my allowed project folder.” | Folder-scoped tools, reviewed writes and version snapshots. |
+| Owned browser | “Open this allowed website and read its form.” | Playwright-controlled Chrome in a separate Bilal profile; exact domains configured in Settings. |
+| Screen questions | “What is on this screen?” | Explicit capture choice and indicator before a one-shot image goes to Gemini; answer only. |
+| Read-only delegation | “Ask Codex to analyze this saved result.” | Runs a restricted CLI task and saves its answer in history; no edits. |
 | Answer questions | “What's the difference between a website and a web app?” | A conversational answer through Gemini and Windows speech. |
 | Work with desktop apps | “Open Notion.” | Discovers registered apps, launches them, and inspects accessible Windows controls. |
 | Play music | “Play Blinding Lights by The Weeknd on Spotify.” | Searches Spotify and checks the actual playback result. |
@@ -51,7 +57,7 @@ You can dictate an email before providing the recipient:
 4. **Bilal:** Continues with the content you already dictated and prepares the draft.
 5. **You:** Review the recipient, subject, and body, then approve or reject sending.
 
-The input box appears for an email address and closes after submission or cancellation. General details such as a city are asked aloud; hold left Ctrl + left Shift or say “Hey Bilal” with the answer to continue the original task. Providing an address does **not** approve sending.
+The input box appears for an email address and closes after submission or cancellation. General details such as a city are asked aloud; hold left Ctrl + left Shift + Space (or use wake after acceptance) with the answer to continue the original task. Providing an address does **not** approve sending.
 
 ## Quick start
 
@@ -94,11 +100,13 @@ GEMINI_MODEL=
 
 If you already have a `.env`, edit it without replacing it. Keep actual credentials out of Git and chat.
 
-### 3. Install the offline wake verifier
+### 3. Optional: prepare wake verification
 
 ```powershell
 .\venv\Scripts\python.exe .\setup_wake_verifier.py
 ```
+
+Wake is not required for hold-to-talk. Installing this model does not unlock wake activation: its independent acceptance report is also required.
 
 This downloads a roughly **145 MB** speech model plus supporting files into `models/wake_asr/`. The installer uses a fixed public model revision, verifies the weight checksum, and resumes interrupted downloads. It does not upload audio.
 
@@ -108,31 +116,28 @@ This downloads a roughly **145 MB** speech model plus supporting files into `mod
 .\venv\Scripts\python.exe .\main.py
 ```
 
-Bilal starts **hidden**, with a system tray icon and local wake monitoring. Say:
+Bilal starts **hidden**, with a system tray icon. Hold **left Ctrl + left Shift + Space**, say “Open Spotify,” and release. There is no wake phrase requirement for this recording. Quit an existing tray instance before starting an update.
 
-> Hey Bilal, open Spotify.
-
-Speak naturally in one utterance; the wake check buffers audio while it verifies the trigger. You can also start recording or type a request from the tray. Quit an existing instance from the tray before starting an updated version.
+Use **Tasks, history and settings → Settings** to store provider keys in Windows Credential Manager. Legacy `.env` keys remain supported; the Settings migration action verifies encrypted copies before clearing migrated values from `.env`. Add `ANTHROPIC_API_KEY` there only if you want to use the installed Claude adapter; subscription sign-in alone is not sufficient for its bare mode.
 
 ## Everyday controls
 
 | Action | Control |
 | --- | --- |
-| Hold to talk globally | Hold **left Ctrl + left Shift**, speak, then release either key to submit the recording. |
-| Start or finish recording | Click the companion, or use the tray's recording action. |
-| Type a request or read a reply | Open **Read reply / type a request** from the tray. |
-| Provide a missing detail | Type or paste into the temporary input box; press **Enter** or **Continue**. |
-| Cancel pending work | Say “never mind” while processing, or use **Cancel request** / **Escape** in Bilal. |
-| Enable or disable activation | Toggle **Listen for Hey Bilal** in the tray. |
-| Enable or disable speech | Toggle **Speak replies** in the tray. |
-| Review waiting actions | Open **Pending approvals** in the tray. |
-| Exit the assistant | Choose **Quit Bilal** in the tray. |
+| Hold to talk globally | **Left Ctrl + left Shift + Space**; release to submit |
+| Change shortcut / toggle mode | **Tasks, history and settings → Settings**, then restart; left Ctrl + left Shift alone is opt-in |
+| Stop all work | **Left Ctrl + left Alt + Backspace**, or **Stop all background tasks** |
+| Exact pasted input | Double-click the avatar, or **Paste exact text / quick input** |
+| Task states, saved answers, approvals | **Tasks, history and settings** |
+| Screen question | **Ask about a window / point to ask**, then choose the capture |
+| Manual recording / typed request | **Start / finish recording** or **Read reply / type a request** |
+| Legacy email / memory / power review | **Pending approvals** |
+| Speech output | **Speak replies** |
+| Exit | **Quit Bilal** |
 
-Ordinary wake/manual capture allows up to **90 seconds**, waits up to **10 seconds** for speech to start, and ends after **4 seconds of silence** following detected speech. A new hold-to-talk capture suppresses silence/no-speech stopping while the keys remain held; release submits it, with a **600-second chunk bound**. Processing a bounded chunk does not hide the companion while the keys are held.
+Ordinary manual/wake capture ends after four seconds of detected silence, waits up to ten seconds for initial speech, and is bounded at 90 seconds. A new held capture suppresses silence/no-speech stopping while held, with a 600-second chunk bound. Release hides the companion and submits audio; processing/spoken output can continue while hidden. No automatic next command capture starts after a reply.
 
-Automatic follow-up capture is disabled by default. Releasing hold-to-talk hides the companion immediately and sends the captured request for background processing; spoken output can continue while it stays hidden. It does not start another command recording after the answer. A busy or speaking avatar ignores clicks.
-
-The global shortcut polls only the two left modifier states; it does not log typing or consume keys from other apps. General clarification questions are spoken and answered with hold-to-talk or a verified “Hey Bilal” turn; an email address still uses a paste box. Cancellation stops later steps and cannot undo completed actions.
+The global keyboard hook tracks the configured chord, forwards keystrokes, ignores injected keys, and does not record typed text. Other apps can still react to that shortcut. Cancellation is cooperative: it stops later steps but cannot undo completed effects or guarantee an in-flight request stopped immediately.
 
 ### The companion
 
@@ -144,14 +149,14 @@ The artwork is a 2D sprite system animated in Qt. Colors and typography live in 
 
 ```mermaid
 flowchart LR
-    A[Hey Bilal] --> B[Local wake checks]
-    B --> C[Capture command]
-    C --> D[Groq transcription]
-    D --> E[Gemini agent]
-    E --> F[Local tools and connectors]
-    F --> G[Actual results]
-    G --> E
-    E --> H[Windows spoken reply]
+    A[Hold to talk or typed input] --> B[Groq for recorded speech]
+    B --> C[Gemini planner]
+    A --> C
+    C --> D[SQLite tasks and bounded workers]
+    D --> E[Policy and exact-step review]
+    E --> F[Local tools or connected services]
+    F --> D
+    D --> G[History artifacts and spoken status]
 ```
 
 Assistant commentary, clarification, and spoken replies use English, with brief context-appropriate humor when useful. Explicitly requested non-English document content can retain that language. The agent interprets the goal, chooses a tool, observes its returned result, and decides what to do next. Questions can be answered without desktop actions. Tasks have a **12-round / 180-second** reasoning budget, with bounded tool timeouts and cancellation checks.
@@ -167,10 +172,16 @@ Desktop control uses Windows accessibility information. Each generic action inva
 | Reasoning and tool selection | Gemini through `google-genai` |
 | Windows app interaction | pywinauto / UI Automation |
 | Spoken output | Windows speech through Qt / SAPI |
-| Preferences and approvals | SQLite |
-| Account credential storage | Windows DPAPI |
+| Tasks, history, artifacts, preferences and approvals | SQLite / FTS5 |
+| Owned browser | Playwright + Chrome, separate persistent profile |
+| Explicit screen answers | PySide6 picker/overlay, memory-only image, Gemini vision |
+| Read-only delegation | Restricted Codex / Claude subprocess adapters |
+| Credential storage | Windows Credential Manager for provider keys; DPAPI for account tokens |
 
 ### Wake activation and background audio
+
+Production wake defaults **off** unless `data/wake_acceptance.json` passes all checks: independent evidence, at least 50 positive trials, at least 90% true activation, at least one hour of negatives, fewer than one false activation/hour, and a test timestamp no older than 30 days. Training clips or installing the verifier do not satisfy this acceptance gate. See [testing](docs/testing.md).
+
 
 The live monitor uses a **0.30 candidate threshold**, while the standalone classifier diagnostic retains **0.80**. Both retain two-frame confirmation; the more permissive live candidate still must pass the local phrase verifier. This is a policy change, not newly trained classifier weights.
 
@@ -216,6 +227,9 @@ Live account acceptance is still pending. See the [implementation status](docs/M
 | Desktop actions | Executed locally through defined tools. |
 | Connected account operations | Sent to the corresponding Gmail or Notion API. |
 | Account tokens | Stored locally with encryption tied to the current Windows user. |
+| Explicit screen image | Only the chosen scope goes to Gemini; image stays memory-only locally; the answer can persist. |
+| Read-only delegated task | Task and selected non-secret artifact go to the chosen CLI/provider. |
+| Exact snippets | Local substitution; non-secret added snippets may be saved, secrets stay memory-only. |
 
 Local recordings, transcripts, replies, and task traces can contain private content. They are excluded from Git, along with learned state, account credentials, reviewed wake recordings, and downloaded verifier weights.
 
@@ -243,15 +257,19 @@ Remove automatic startup:
 
 Factual questions use quiet Bing RSS search and public webpage reading without opening tabs. Search can be blocked; snippets alone do not verify a changing fact. Research is bounded in code per run: two searches, three page reads, two browser openings, and two prayer lookups, with identical repeats blocked. Prayer lookup independently resolves the confirmed city/country through Nominatim/OpenStreetMap, then requests Aladhan by coordinates, date, and calculation method (default 1, Karachi). It cross-checks returned coordinates/date/method rather than trusting a city-name response. These are calculated prayer starts, not mosque congregation times. No GPS/IP location is inferred; a missing city is asked aloud.
 
-## Current limits
+## Current limits and known failure states
 
-- **App coverage:** discovering an installed app does not guarantee its interface can be automated. Canvas-only or inaccessible controls can block a task.
-- **Browser control:** public webpage reading and accessible controls are available; general browser DOM automation and screenshot-based reasoning are not implemented.
-- **Wake accuracy:** the classifier remains experimental. The phrase gate reduces false activation, but fresh voice and background-playback acceptance is still needed.
-- **Voice interruption:** offline cancellation uses Windows' English recognizer. Accent, distance, music, and noise can affect recognition.
-- **Account workflows:** Gmail and Notion need separate setup and live validation. Gmail attachment sending is unavailable.
-- **Power actions:** Windows permissions, open apps, and hardware support can prevent a request. Accepting a request is not proof the machine completed it.
-- **Learning:** preferences need confirmation, and wake labels need review. Candidate training does not automatically replace the deployed model.
+- **Full product scope:** all 138 capability IDs are tracked, not completed. External-agent writes, project-only OS read isolation, installer/onboarding, representative resource benchmarks, and dogfooding remain release work.
+- **Task recovery:** tasks, steps, history and artifacts persist. Running work becomes interrupted after restart; writes are not blindly replayed. Memory-only literal payloads and screen frames expire, so affected continuations need fresh input.
+- **Approvals:** a single-step approval resumes that exact step. A deterministic file/contact/project/schedule plan can batch up to 20 calls under one review; edits invalidate approval and execution stops at the first failed check. Dynamic UI batches and external-agent write plans are excluded.
+- **Browser:** owned Chrome DOM tools do not attach to personal tabs. Exact allowed domains must include needed hostnames; blocked navigation/resources, stale elements, and protected controls can stop progress. This is not unrestricted browser automation.
+- **Screen/pointer:** explicit one-shot questions are implemented with sensitive-window guards and a 20-question/day limit. Pointer interception is partial pending secure-desktop, exclusive-fullscreen and mixed-DPI acceptance. No autonomous vision-based clicking is supplied.
+- **Agents:** local read-only Codex live check passed. Claude 2.1.309 is installed locally but needs `ANTHROPIC_API_KEY` in Settings and live acceptance. Neither adapter can edit files; read-only mode does not establish machine-wide confidentiality isolation.
+- **Voice/apps:** physical hotkey, speech, background playback and general app accessibility acceptance remain pending. Wake is gated off until independent evidence passes.
+- **Accounts/power:** Gmail/Notion live authorization tests remain pending by choice. Attachments and broad account management are absent. Windows can refuse/delay power requests; accepted is not proof of a completed transition.
+- **Protection coverage:** secret detection and sensitive-window names are heuristics, not exhaustive prevention. Audit-chain checking is local integrity evidence, not complete reconstruction of every possible external effect.
+
+The [capability status matrix](docs/CAPABILITY_STATUS.md) records the per-feature assessment and remaining acceptance work. Use the [full spec](docs/CAPABILITY_SPEC.md) for the target, not as a claim that every row already works.
 
 ## Development
 
@@ -262,7 +280,7 @@ Factual questions use quiet Bing RSS search and public webpage reading without o
 .\venv\Scripts\python.exe .\check_mvp_readiness.py --tests
 ```
 
-**Validation snapshot — 23 October 2026:** 154 automated tests passed. Coverage includes the agent loop, stale controls, recording, transcription, wake gating, contextual input, approvals, cancellation, media verification, shutdown cleanup, and mocked power actions. Account and power effects in these tests are simulated; passing them does not establish live account delivery or complete physical voice acceptance.
+Automated foundation tests cover durable tasks, literal preservation, policy approvals and existing regressions. The current run and live evidence are recorded in [testing](docs/testing.md) and [capability status](docs/CAPABILITY_STATUS.md); a passing test count is not proof of all 138 acceptance cases. Account and power effects in automated tests are simulated. Physical microphone, hotkey, account and sign-in checks remain separate.
 
 The readiness report is written to the ignored `logs/mvp_readiness.json`. It checks local configuration without account API calls or microphone recording.
 
@@ -285,10 +303,26 @@ Training requires reviewed data from balanced sessions. Missing or changed clips
 
 This renders the eight character states without microphone or API usage. Images are saved in the ignored `ui_preview/` folder.
 
+### New capability foundation
+
+**Tasks** use three workers by default, dependency-aware child tasks and in-app schedules. The app must be running for schedules to fire; it cannot wake an asleep PC. Task Center exposes Tasks, History, Approvals, Audit and Settings.
+
+**Exact input** separates pasted payload from instructions. Quick Input sends opaque descriptors/tokens to planning, and the local executor substitutes original text. Non-secret added snippets can be saved locally; secret slots are memory-only. Closing the panel clears its vault while already queued tasks keep their own copies. Secret detection is heuristic. Provider keys belong in Settings, not an instruction.
+
+**File policy** starts with no allowed folders. Add a narrowly chosen folder in Settings. Writes, moves, recycling and restores need exact-step review; overwrites keep version snapshots. Versions are Windows-user-encrypted locally. New copy operations are lower-risk and do not use the same approval gate as overwrites. Dry run shows planned tool calls without executing their effects.
+
+**Owned browser** uses a separate profile at `data/browser-profile/`; configure exact allowed hostnames, without wildcards, in Settings. It offers observed DOM reading/filling/clicking with stale-element checks. Authentication, submission and destructive controls remain blocked.
+
+**Screen questions** require an explicit capture choice and visible indicator. Only the selected window/monitor/region is sent to Gemini. Image frames stay in memory; derived answers can persist as artifacts. The answer model has no action tools. Sensitive-title guards and pointer interception are implemented foundations, with physical edge-case acceptance pending.
+
 ### Source map
 
 | Files | Responsibility |
 | --- | --- |
+| `task_runtime.py`, `task_engine.py`, `task_store.py`, `task_center.py` | Durable queue, bounded execution, history, artifacts, task review and Settings |
+| `tool_policy.py`, `capability_tools.py`, `file_tools.py`, `literal_slots.py`, `quick_input.py` | Policy, scoped files, exact pasted payloads and reviewed continuations |
+| `dom_bridge.py`, `dom_worker.py`, `screen_awareness.py`, `media_controls.py` | Owned browser, explicit screen questions, observed playback and volume |
+| `delegation.py`, `provider_keys.py`, `wake_acceptance.py` | Restricted CLI adapters, provider credentials and wake acceptance gate |
 | `main.py`, `ui_controller.py`, `contextual_input.py`, `conversation.py`, `hold_to_talk.py` | Companion UI, conversation presence, global hold-to-talk, request lifecycle, and missing-detail popup |
 | `agent_core.py`, `agent_tools.py`, `request_router.py` | Model reasoning, tool declarations, and dispatch |
 | `wake_service.py`, `wake_verifier.py`, `wakeword_gate.py` | Wake monitoring, local phrase check, and temporal gate |
@@ -306,18 +340,20 @@ This renders the eight character states without microphone or API usage. Images 
 | --- | --- |
 | No window appears at launch | Normal: Bilal starts hidden. Look for its tray icon. |
 | “Bilal is already running” | Use the existing tray instance; quit it before restarting an update. |
-| Wake activation is unavailable | Run `setup_wake_verifier.py`, restart, and inspect `logs/ui_startup.json`. |
+| Wake activation is unavailable | Expected until independent acceptance passes; use hold-to-talk. The offline model is also needed after acceptance. |
 | A video triggers the companion | Check whether it contained the full phrase; mark false activations from the tray and follow the background-playback test guide. |
-| Recording ends while thinking | Ordinary capture ends after four seconds of silence. Use left Ctrl + left Shift hold-to-talk for longer thinking pauses, releasing to submit. |
+| Recording ends while thinking | Ordinary capture ends after four seconds of silence. Use left Ctrl + left Shift + Space hold-to-talk for longer thinking pauses, releasing to submit. |
 | No audible reply | Enable **Speak replies**, check the default output device, and check installed Windows voices. |
 | Gmail or Notion is unavailable | Complete Bilal's standalone account setup and page permissions. |
-| A task fails or claims the wrong outcome | Inspect the private `logs/agent_latest.json` trace and saved transcript. |
+| A task fails or claims the wrong outcome | Inspect its state, steps, error and artifacts in **Tasks, history and settings**; redact private data before sharing. |
 
 ## Project documentation
 
 Start with the [documentation hub](docs/README.md) for the user guide, feature reference, architecture, code walkthrough, configuration, testing, and troubleshooting. For code changes, follow the [contribution and documentation workflow](CONTRIBUTING.md).
 
-- [Implementation and acceptance status](docs/MVP_IMPLEMENTATION.md)
+- [Current capability implementation and acceptance status](docs/CAPABILITY_STATUS.md)
+- [Full 138-capability target specification](docs/CAPABILITY_SPEC.md)
+- [Historical MVP implementation](docs/MVP_IMPLEMENTATION.md)
 - [Physical voice and account test guide](docs/FIELD_ACCEPTANCE.md)
 - [Wake calibration](training/VOICE_CALIBRATION.md)
 - [Character asset notes](assets/character/ASSET_NOTES.md)

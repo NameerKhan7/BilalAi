@@ -7,13 +7,32 @@ Reviewed **23 October 2026**. Paths below are relative to the repository root. F
 ## Start reading here
 
 1. [`ui_controller.py`](../ui_controller.py): how a user request changes state.
-2. [`request_router.py`](../request_router.py): the small handoff to the agent.
+2. [`task_runtime.py`](../task_runtime.py), [`task_engine.py`](../task_engine.py): production queue, task ownership and independent execution. `request_router.py` retains the older synchronous handoff.
 3. [`agent_core.py`](../agent_core.py): model context, tool loop and exit conditions.
 4. [`agent_tools.py`](../agent_tools.py): what the model can request and how calls are checked.
 5. The worker or connector for the feature you want to change.
 6. The related tests before editing behavior.
 
 ## Interface and lifecycle
+
+The detailed queue/policy contracts are in [task-system.md](task-system.md). Production `AssistantController(enable_tasks=True)` differs from the synchronous default retained for isolated controller tests.
+
+| New module | Responsibility |
+| --- | --- |
+| [`task_store.py`](../task_store.py) | Tasks, steps, FTS artifacts, history, profiles, contacts, settings, schedules and hash-chained audit |
+| [`task_engine.py`](../task_engine.py) | Bounded concurrent workers, dependencies, cooperative controls, restart state and scheduler |
+| [`task_runtime.py`](../task_runtime.py) | Queue integration, exact-step/batch continuation, durable conversation and provider/delegate ownership |
+| [`tool_policy.py`](../tool_policy.py) | Tool metadata, allow checks, dry runs, expiring one-use approvals and trusted business decision audit |
+| [`capability_tools.py`](../capability_tools.py) | File/task/contact/project/artifact/plan/delegation tool schemas and implementations |
+| [`literal_slots.py`](../literal_slots.py) | Exact local values, opaque slots, secret detection, masking and per-task snapshots |
+| [`quick_input.py`](../quick_input.py), [`task_center.py`](../task_center.py) | Exact payload UI, task/history/approval/settings/audit dialogs |
+| [`provider_interfaces.py`](../provider_interfaces.py), [`provider_keys.py`](../provider_keys.py) | Provider contracts, Gemini planner and Windows Credential Manager |
+| [`delegation.py`](../delegation.py) | Tool-disabled headless CLI analysis and artifact capture; no external-agent write mode |
+| [`file_tools.py`](../file_tools.py) | Allowed-folder reads/writes, copy/move, DPAPI snapshots and recycle/restore |
+| [`dom_bridge.py`](../dom_bridge.py), [`dom_worker.py`](../dom_worker.py) | Serialized owned Chrome DOM session, observed element handles and domain restrictions |
+| [`media_controls.py`](../media_controls.py) | WinRT play/pause/skip and Core Audio volume readback |
+| [`screen_awareness.py`](../screen_awareness.py) | Explicit capture picker/indicator, memory-only frames, sensitive guard, pointing overlay and tool-free screen answers |
+| [`wake_acceptance.py`](../wake_acceptance.py) | Fresh independent evidence gate before production wake activation |
 
 | File | Main interfaces | Responsibility |
 | --- | --- | --- |
@@ -52,7 +71,7 @@ The controller's main states are `idle`, `recording`, `transcribing`, `thinking`
 | Accounts | `gmail_create_draft`, `notion_search`, `notion_read`, `notion_create_note` | Gmail draft is unsent; Notion creation includes readback |
 | Proposals | `propose_memory`, `request_system_power` | Human confirmation required before saving/executing |
 
-All declared parameters are strings; enums constrain selected fields. Dispatch rejects unknown tools, extra/missing fields, non-string values and values longer than 4,000 characters. Feature-specific validators impose additional limits. There is deliberately no model tool for arbitrary shell execution, approval or email sending.
+All declared parameters are strings; enums constrain selected fields. Production rejects unknown tools, extra/missing fields, non-string values and oversized arguments. Most legacy parameters are limited to 4,000 characters, selected text fields and new tool arguments to 100,000; literal substitution and backend byte limits apply separately. There is no model-exposed arbitrary shell, approval or email-send tool. The full current declaration lists live in `agent_tools.py` and `capability_tools.py`; the older groups below are not an exhaustive list.
 
 ## Desktop, browser and media
 

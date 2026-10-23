@@ -2,7 +2,7 @@
 
 [Documentation home](README.md) · [Code reference](code-reference.md) · [Data and security](data-and-security.md)
 
-Reviewed against the source on **22 October 2026**. This describes the current experimental implementation, not a promise of universal desktop control.
+Reviewed against the source on **23 October 2026**. The production app now uses a durable background task runtime. Read [Tasks, policy, exact input and delegation](task-system.md) for its detailed contracts and [capability status](CAPABILITY_STATUS.md) for incomplete acceptance. The legacy synchronous RequestProcessor remains available to tests/direct callers.
 
 ## What kind of system is Bilal?
 
@@ -23,20 +23,24 @@ The wake classifier is trained separately. Using an LLM agent does not mean Bila
 
 ```mermaid
 flowchart TD
-    Mic[Microphone] --> Wake[WakeMonitor: classifier and local phrase verifier]
+    Mic[Microphone] --> Capture[Explicit hold/manual capture]
+    Mic -. acceptance gated .-> Wake[WakeMonitor: classifier and local phrase verifier]
     Wake --> Capture[Command capture using the same stream]
     Manual[Tray recording] --> Capture
     Capture --> STT[Groq transcription]
     STT --> Controller[AssistantController]
     Typed[Typed request or missing-detail reply] --> Controller
-    Controller --> Router[RequestProcessor]
-    Router --> Brain[AgentBrain.run]
+    Controller --> Runtime[TaskRuntime and SQLite queue]
+    Runtime --> Planner[Independent goals and dependencies]
+    Planner --> Workers[Three background workers]
+    Workers --> Brain[AgentBrain.run or headless delegate]
     Brain --> Executor[AgentToolExecutor]
+    Executor --> Policy[Central policy and human review]
     Executor --> Desktop[Persistent desktop worker]
     Executor --> Media[Spotify worker and media readback]
     Executor --> Web[Chrome opening and public web reader]
     Executor --> Connectors[Gmail and Notion connectors]
-    Executor --> State[SQLite preferences and pending approvals]
+    Executor --> State[SQLite tasks, steps, history, artifacts and audit]
     Desktop --> Brain
     Media --> Brain
     Web --> Brain
@@ -53,14 +57,14 @@ Tools return evidence, errors, or pending work. A launch result with `verified: 
 ## One voice request, end to end
 
 1. `main.py` creates the Qt application, single-instance lock, controller, companion and tray. The companion starts hidden.
-2. `WakeMonitor` reads 80 ms audio blocks. `DetectionGate` applies the live `candidate_threshold` (0.30, falling back to `threshold`), consecutive-frame requirement and repeat cooldown. The standalone acoustic diagnostic retains 0.80. Every accepted live candidate still requires full local phrase verification.
+2. Default activation is the configurable left Ctrl+Shift+Space hold chord. Wake monitoring is off until fresh independent acceptance passes. When enabled, `WakeMonitor` reads 80 ms audio blocks, applies the candidate gate and then requires full local phrase verification.
 3. A candidate includes recent audio plus short lookahead. `OfflineWakeVerifier` checks it in a background thread while the microphone continues buffering.
 4. Only an accepted candidate produces a callback containing `phrase_verified=True`. The controller rejects stale, disabled or unverified callbacks.
 5. Command capture reuses that microphone stream and buffered audio. It stops after configured silence, a user stop, or the maximum recording time.
 6. The controller saves a local WAV and sends it to Groq. For wake-started requests, the final transcript must also contain “Hey Bilal”; otherwise agent execution is skipped. Typed/manual requests do not need that phrase.
-7. `RequestProcessor.handle()` creates an executor and calls `AgentBrain.run()`.
-8. The agent answers directly or performs the bounded observe–act–verify loop below.
-9. The controller saves the answer for recorded requests and signals the Qt UI. The companion speaks through Windows speech. Automatic follow-up capture is disabled by default, so the UI hides after the reply. Hold release immediately hides/ends the session while processing and audio may continue. Wake monitoring resumes once the conversation and request lifecycle allow it.
+7. Production `TaskRuntime.submit()` queues the command and frees the voice controller. Its planner creates independent tasks or dependencies; the worker builds a separate brain/executor per task.
+8. The agent answers directly or performs the bounded observe–act–verify loop. Every production tool call passes policy. Reviewed deterministic plans execute without replaying earlier writes.
+9. Results, steps and text artifacts are saved in SQLite. Task notifications wait until capture/speech/review permits delivery. Hold release immediately hides the companion and stops capture. No automatic post-reply microphone opens.
 
 See [configuration](configuration.md) for the current audio and wake constants. The phrase verifier is context-biased: it receives `Hey Bilal.` as vocabulary context and additionally requires the full phrase, average log probability at least `-0.60`, and no-speech probability below `0.6`. It is neither speaker identification nor playback echo cancellation.
 
@@ -68,7 +72,7 @@ See [configuration](configuration.md) for the current audio and wake constants. 
 
 `AssistantWindow.conversation_enabled` defaults to `False`. The internal `ConversationSession` and 15s follow-up mode remain available to tests/explicit code configuration, but are not the default listening behavior. Each ordinary new voice turn requires wake, manual capture, or hold-to-talk.
 
-`HoldToTalk` polls left Ctrl/left Shift state every 25ms without capturing typing. A permitted hold sets a thread-safe event and starts capture if idle. Release requests capture finish, ends the session, and hides the companion immediately. `hold_background` suppresses later task/reply popups for that held request while allowing processing and speech. Busy/speaking avatar clicks are ignored so an accidental click cannot reopen capture.
+`HoldToTalk` uses a small Windows low-level keyboard hook on its own thread. It tracks configured chord keys only, does not log typing and rejects injected activation. The 25ms polling path remains for injected test backends. The default chord is left Ctrl+Shift+Space; modifier-only Ctrl+Shift and toggle mode are Settings options applied after restart. Release finishes capture and hides the companion immediately. Double-click opens exact input; a deferred single click avoids starting capture during that gesture.
 
 `CommandEndpoint.feed(..., held=True)` suppresses silence/no-speech endpoints but retains the duration bound. New hold and spoken-clarification captures use 600s; an existing ordinary wake/manual capture retains 90s. Reaching the bound can process a chunk before release. This does not enable unlimited continuous recording.
 
@@ -76,7 +80,7 @@ Email clarification and approvals remain manual dialogs and cannot be submitted 
 
 ## The agent loop
 
-`AgentBrain.run(query, executor, ...)` supplies Gemini with the active request, recent conversation, confirmed preferences, current Asia/Karachi date, agent rules and declared tools. The default retains six request/answer pairs in memory. Active prompt policy uses English assistant commentary, relevant follow-up questions, and restrained contextual humor; explicitly requested non-English document content remains possible. Conversation is context, not permission for additional actions.
+`AgentBrain.run(query, executor, ...)` supplies Gemini with the active request, recent conversation, confirmed preferences, current Asia/Karachi date, agent rules and declared tools. Production loads bounded recent turns from SQLite; older work is retrieved through artifact search. Direct legacy instances retain six pairs in RAM. Active assistant commentary remains English. Conversation and retrieved content are context, not authority.
 
 Each round:
 
@@ -97,7 +101,7 @@ A tool result with `outcome_uncertain` prevents subsequent mutations during that
 
 `ResearchGuard` bounds each run independently of prompt compliance: two searches, three page reads, two browser openings, two prayer lookups, and no identical normalized repeats. Blocked/short error pages are rejected as evidence. A blocked source should end with an honest result/blocker rather than opening tabs indefinitely.
 
-Private task traces include model-round count, elapsed seconds, research counters, provider HTTP code when available, and each tool step’s elapsed milliseconds and round. Checkpoints preserve partial progress if a task stops. These observations support diagnosis; they do not imply the requested effect succeeded.
+Legacy private JSON traces include timing and research counters. Production uses task IDs, SQLite steps/results, artifacts and policy audit records; it disables those unmasked legacy per-request JSON files. Search retrieval can pass its step check while remaining insufficient factual evidence; a source read or another verified observation is required. A completion claim alone never verifies a mutation.
 
 ## Observe before acting
 

@@ -4,6 +4,12 @@ This is the guide to using, understanding, and developing Bilal AI. The source c
 
 Reviewed against the repository on **23 October 2026**. Bilal is experimental. A feature being implemented does not mean it has passed real microphone, Windows sign-in, or connected-account acceptance tests.
 
+## Current capability build
+
+The runtime now includes a durable task queue, Task Center, exact local input slots, policy approvals, controlled files, credential settings, read-only headless delegation, an owned Chrome DOM session, and an explicit screen-question path. **This is a partial capability-spec implementation, not completion of every P0 requirement.** Read [Task system](task-system.md) for the active runtime and the [138-item capability matrix](CAPABILITY_STATUS.md) beside the [specification](CAPABILITY_SPEC.md) for evidence and gaps.
+
+Wake is off by default behind independent acceptance. The normal talk chord is **Ctrl+Shift+Space**; Settings supports remapping/toggle after restart, and **Ctrl+Alt+Backspace** is the global stop. Provider keys belong in Windows Credential Manager through Settings; Gemini/Groq migration/readback has been verified.
+
 ## Start here
 
 | Your goal | Read in this order |
@@ -22,6 +28,8 @@ Reviewed against the repository on **23 October 2026**. Bilal is experimental. A
 | [Getting started](getting-started.md) | What do I install, configure, and run? |
 | [User guide](user-guide.md) | How do I talk to Bilal, type missing details, cancel, and review actions? |
 | [Feature reference](features.md) | What can each feature do, what are its limits, and where is its code? |
+| [Task system](task-system.md) | How do queued tasks, exact input, policy, headless agents, and artifacts work now? |
+| [Capability status](CAPABILITY_STATUS.md) | Which138 specification requirements are implemented, tested, partial, or pending? |
 | [Architecture](architecture.md) | How do wake detection, recording, the model, tools, and UI work together? |
 | [Code reference](code-reference.md) | Which module owns a responsibility, and where should I make a change? |
 | [Configuration](configuration.md) | Which settings exist, where are their defaults, and how do I change them? |
@@ -30,6 +38,8 @@ Reviewed against the repository on **23 October 2026**. Bilal is experimental. A
 | [Troubleshooting](troubleshooting.md) | How do I investigate a failure without guessing? |
 | [Design decisions](decisions.md) | Why does the implementation use this approach, and what tradeoffs remain? |
 | [Contributing](../CONTRIBUTING.md) | How should code, tests, and documentation change together? |
+
+See the [23 October native validation report](VALIDATION_2026-10-23.md) for bounded live checks and the latest running-app sample.
 
 ## Status and evidence
 
@@ -40,7 +50,7 @@ Use these terms consistently when discussing the project:
 - **Field acceptance:** a person checks the real microphone, speaker, Windows session, app, or account and records the outcome.
 - **Pending:** the required acceptance evidence is missing. Do not infer a pass from a mock or from a credential file existing.
 
-The latest recorded regression snapshot is **154 passing automated tests on 23 October 2026**. See [testing](testing.md) for its scope and wake replay evidence. Gmail and Notion live account acceptance remains pending; a connection inside Codex does not connect the standalone Bilal app.
+The capability build’s confirmed full native Windows snapshot is **195 passing tests in 22.078 seconds on 23 October 2026**. See [testing](testing.md) for its scope and wake replay evidence. Gmail and Notion live account acceptance remains pending; a connection inside Codex does not connect the standalone Bilal app.
 
 ## Historical and specialist references
 

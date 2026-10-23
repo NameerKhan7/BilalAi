@@ -42,7 +42,7 @@ def web_search(query,session=None):
         results.append({'title':item.findtext('title','')[:250],'url':url,'snippet':item.findtext('description','')[:1500]})
     if not results:raise RuntimeError('Search returned no usable results. Do not keep opening browser tabs.')
     return {'ok':True,'query':query,'results':results,'url':source+'?'+urlencode({'q':query,'format':'rss'}),
-        'untrusted_content':True,'verified':False,'note':'Snippets are leads, not proof of a date-sensitive fact. Read a relevant source.'}
+        'untrusted_content':True,'verified':False,'step_verified':True,'note':'Search retrieval was verified, but snippets are leads, not proof of a date-sensitive fact. Read a relevant source.'}
 
 
 GEOCODE_LOCK=threading.Lock()

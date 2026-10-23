@@ -13,6 +13,7 @@ ROOT=Path(__file__).resolve().parents[1]
 
 class TranscriptionTests(unittest.TestCase):
     def setUp(self):
+        credentials=patch('stt_client.credential_key',return_value=None);credentials.start();self.addCleanup(credentials.stop)
         folder=ROOT/'recordings'
         folder.mkdir(exist_ok=True)
         self.path=folder/('stt_test_'+uuid.uuid4().hex+'.wav')
@@ -50,7 +51,7 @@ class TranscriptionTests(unittest.TestCase):
             factory.assert_not_called()
 
     def test_missing_api_key_is_not_a_network_request(self):
-        with patch.dict(os.environ,{},clear=True),patch('stt_client.dotenv_values',return_value={}),patch('stt_client.Groq') as factory:
+        with patch.dict(os.environ,{},clear=True),patch('stt_client.dotenv_values',return_value={}),patch('stt_client.credential_key',return_value=None),patch('stt_client.Groq') as factory:
             with self.assertRaisesRegex(TranscriptionError,'GROQ_API_KEY'):
                 transcribe_recording(self.path)
             factory.assert_not_called()

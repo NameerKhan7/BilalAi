@@ -80,11 +80,11 @@ class NotionClient:
             for page in data.get('results',[]):
                 title=next((v for v in page.get('properties',{}).values() if v.get('type')=='title'),{})
                 results.append({'id':page['id'],'url':page.get('url'),'title':''.join(t.get('plain_text',t.get('text',{}).get('content','')) for t in title.get('title',[]))})
-            if not data.get('has_more'):return {'ok':True,'pages':results,'truncated':False}
+            if not data.get('has_more'):return {'ok':True,'verified':True,'pages':results,'truncated':False}
             next_cursor=data.get('next_cursor')
             if not next_cursor or next_cursor==cursor:break
             cursor=next_cursor
-        return {'ok':True,'pages':results,'truncated':True}
+        return {'ok':True,'verified':True,'pages':results,'truncated':True}
     def read(self,page_id):
         text=[];budget=[600];truncated=[False]
         def blocks(block_id,depth=0):
@@ -107,7 +107,7 @@ class NotionClient:
                 cursor=nxt
         blocks(page_id)
         full='\n'.join(text)
-        return {'ok':True,'page_id':page_id,'text':full[:18000],'truncated':truncated[0] or len(full)>18000}
+        return {'ok':True,'verified':True,'page_id':page_id,'text':full[:18000],'truncated':truncated[0] or len(full)>18000}
     def create_note(self,parent_id,title,body):
         chunks=[body[i:i+1800] for i in range(0,len(body),1800)]
         payload={'parent':{'page_id':parent_id},'properties':{'title':{'type':'title','title':[{'type':'text','text':{'content':title}}]}},

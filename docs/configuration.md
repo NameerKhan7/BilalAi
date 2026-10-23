@@ -2,7 +2,7 @@
 
 [Documentation home](README.md) · [Setup](getting-started.md) · [Code reference](code-reference.md)
 
-These are the settings the current code actually reads. Most behavior limits are code defaults rather than user-facing preferences. Restart Bilal after changing files or environment variables.
+These are the settings the current code actually reads. Task Center now exposes persisted runtime settings; some behavior limits remain code defaults. Restart Bilal after changing files or environment variables.
 
 ## Provider settings
 
@@ -14,9 +14,17 @@ The committed [.env.example](../.env.example) is the template; the real `.env` i
 | `GROQ_API_KEY` | None | Required for recorded-command transcription. Typed requests do not need it. |
 | `GEMINI_MODEL` | `gemini-3.5-flash-lite` | Overrides the model used by `AgentBrain`. Blank falls back to the default. |
 
-For normal app usage, a process environment value takes precedence over the corresponding `.env` value. `AgentBrain(model=...)` can override the model in code; `transcribe_recording(..., api_key=...)` can override the transcription key for a direct caller. Those parameters are developer interfaces, not extra `.env` entries.
+Provider key precedence is process environment → Windows Credential Manager (`BilalAI/NAME`) → legacy `.env`. Save keys through **Tasks, history and settings → Settings**. The migration action writes and reads back each stored credential before blanking its legacy `.env` entry. Actual Gemini/Groq project keys have been migrated and verified; the legacy fallback remains for compatibility. Never reproduce key values in documentation. `AgentBrain(model=...)` can override the model in code; `transcribe_recording(..., api_key=...)` can override the transcription key for a direct caller. Those parameters are developer interfaces, not extra `.env` entries.
 
 Groq's model is currently the `DEFAULT_MODEL` constant in `stt_client.py`: `whisper-large-v3-turbo`. It is not configured with `GROQ_MODEL`. Account tokens are handled separately through [connection setup](getting-started.md), not added to `.env`.
+
+## Default activation and shortcuts
+
+Automatic wake is **off by default**. Enabling it requires a fresh independent acceptance report (`data/wake_acceptance.json`): at least 50 positive trials, at least 90% true activations, at least one hour of negative/background audio with fewer than one false activation per hour, and evidence no older than 30 days. Historical saved-clip replay does not satisfy this gate.
+
+The normal talk shortcut is **Ctrl + Shift + Space**, using the left Ctrl/Shift keys. Hold to record and release to send/hide; toggle mode and remapping are available in Settings and require restart. Left Ctrl + left Shift alone is an optional remap, not the default. The global emergency stop is **Ctrl + Alt + Backspace** (left modifiers). It stops queued/running work and capture; completed changes remain. Native hook registration/cleanup has been checked, but real 50-trial keyboard/voice acceptance remains pending.
+
+The Windows low-level keyboard hook tracks only configured chord keys, forwards events, and ignores injected events for activation. It does not log typed text.
 
 ## Wake detector policy
 
@@ -70,7 +78,7 @@ The monitor retains 32 blocks of pre-candidate context and adds three blocks of 
 
 New hold-to-talk and spoken-clarification captures override `max_seconds` to 600 and calibration to zero. Dormant internal follow-up mode uses a 15s initial wait, but default `AssistantWindow.conversation_enabled` is `False`; normal operation never automatically starts it. Hold/clarification mode starts with 10 but suppresses no-speech and silence endpoints while the keys remain held. Ordinary capture remains 90s/10s/4s. Release requests manual finish, and the 600s bound can process a chunk before release.
 
-`conversation.py` defines `FOLLOWUP_WAIT_SECONDS=15.0`, exact whole-utterance conversation endings, and visibility presence. `hold_to_talk.py` polls only Windows left Ctrl (`0xA2`) and left Shift (`0xA0`) states every 25ms; it does not intercept or record typed keys. The shortcut has no current user-facing remapping setting. Hold release ends the session and hides the UI while processing/audio may continue. General `text` clarification can be recorded with hold-to-talk; an `email` field retains the paste dialog. Busy/speaking avatar clicks are ignored.
+`conversation.py` defines `FOLLOWUP_WAIT_SECONDS=15.0`, exact whole-utterance conversation endings, and visibility presence. `hold_to_talk.py` installs a configured-key Windows hook in production; injected test readers use 25ms polling. The default UI chord adds Space to left Ctrl/Shift; Settings supports remapping and toggle mode after restart. Typed text is never logged by this component. Hold release ends the session and hides the UI while processing/audio may continue. General `text` clarification can be recorded with hold-to-talk; an `email` field retains the paste dialog. Busy/speaking avatar clicks are ignored.
 
 Silence detection measures sound level; it does not understand whether a sentence is complete. The guided wake-example collector deliberately uses shorter capture limits than regular commands.
 
@@ -97,3 +105,17 @@ Recordings, traces, learned preferences, approval state, account tokens, downloa
 `ResearchGuard` in `research_tools.py` permits per-run maxima of two quiet searches, three page reads, two browser openings, and two prayer lookups. Identical normalized tool/argument repeats are rejected. These are code limits, not `.env` options. Quiet Bing RSS search returns up to five leads. Research HTTP calls use 12s timeout, no redirects, and 256,000-byte response bound. Prayer calculation defaults to Aladhan method `1` (Karachi), with city, country, and ISO date required. No GPS/IP location detection or silent preferred-city saving is implemented. Confirmed memory and current context remain the available location sources.
 
 Prayer location resolution uses Nominatim structured city/country search with up to three candidates. Matches must have the requested country and a settlement type; matches separated by more than 0.1 degrees require clarification. Production requests are serialized with one-second spacing and a 64-entry in-memory LRU cache. Aladhan receives the resolved coordinates through `/timings/DD-MM-YYYY`; return coordinates must match within 0.02 degrees, date and method ID must match, and timezone/Fajr must be present. The cache does not persist a preferred city, use GPS/IP, or automatically save memory. OpenStreetMap attribution is included in returned location metadata. Research streaming also has a 25-second total deadline in addition to the 12-second request timeout.
+
+## Task Center settings
+
+**Tasks, history and settings** in the tray opens queued/running tasks, artifacts, approvals, history, and Settings. Settings are stored in `data/assistant.sqlite3` through `TaskStore` alongside tasks, steps, artifacts, profiles, contacts, schedules, snippets, and audit records. Configure allowed folders and exact allowed browser hostnames before using those tools. An allowlist is an application check, not OS read isolation.
+
+Provider key controls support Gemini, Groq, and `ANTHROPIC_API_KEY`. Claude requires its own key; an installed CLI does not grant API authorization. Dry-run mode returns proposed tool work without executing it. Exact policy decisions, risk levels, and task continuation are explained in [Task system](task-system.md); review the [capability matrix](CAPABILITY_STATUS.md) before treating a path as fully accepted.
+
+## Explicit screen questions
+
+Screen capture is opt-in per question through a picker for a window, monitor, all monitors, or pointer/region selection. A visible indicator precedes capture, sensitive-window overlap checks can reject it, and the daily cap is 20 captured questions. Images stay in task memory and may be sent to Gemini for an answer-only vision request; they are not saved as screenshot files. Text answers/artifacts can persist. There is no local OCR engine. Custom sensitive-window terms are stored in Settings; title-based checks are not complete sensitive-content detection. Live capture, mixed-DPI/secure-desktop behavior, and 20-element safe pointer acceptance remain pending.
+
+## Editable deterministic plans
+
+`propose_plan` prepares one review for up to 20 typed deterministic file/contact/project/schedule calls. Review/edit the plan in Task Center; editing invalidates the old approval and creates a fresh exact plan review. Dynamic desktop/DOM control batches are excluded, and this does not enable write-mode external-agent delegation. Execution stops at the first failed/unverified step; completed earlier steps are not replayed. Non-secret plans can survive normal shutdown for later review. RAM-only secret slots require fresh pasting/review after restart.

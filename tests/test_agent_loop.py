@@ -12,6 +12,7 @@ def response(text=None,calls=()):
 
 class AgentLoopTests(unittest.TestCase):
     def setUp(self):
+        credentials=patch('agent_core.credential_key',return_value=None);credentials.start();self.addCleanup(credentials.stop)
         self.env=patch.dict(os.environ,{},clear=True);self.env.start()
         self.values=patch('agent_core.dotenv_values',return_value={'GEMINI_API_KEY':'test-key'});self.values.start()
         self.factory=patch('agent_core.genai.Client');self.create=self.factory.start()

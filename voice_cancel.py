@@ -1,6 +1,6 @@
 """Offline cancellation phrases during processing; no audio goes to a provider."""
 import re,subprocess,threading
-CANCEL_PHRASES={'never mind','nevermind','cancel that','cancel the request','stop bilal','forget it'}
+CANCEL_PHRASES={'stop','never mind','nevermind','cancel that','cancel the request','stop bilal','forget it'}
 def is_cancel_request(text):
     text=re.sub(r'[^\w\s]',' ',text.casefold())
     text=re.sub(r'\s+',' ',text).strip()

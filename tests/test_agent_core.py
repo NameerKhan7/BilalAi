@@ -7,6 +7,7 @@ from agent_core import AgentBrain,AgentError,DEFAULT_MODEL
 
 class AgentBrainTests(unittest.TestCase):
     def setUp(self):
+        credentials=patch('agent_core.credential_key',return_value=None);credentials.start();self.addCleanup(credentials.stop)
         self.environment=patch.dict(os.environ,{},clear=True)
         self.values=patch('agent_core.dotenv_values',return_value={'GEMINI_API_KEY':'test-key-without-prefix'})
         self.factory=patch('agent_core.genai.Client')
@@ -54,7 +55,7 @@ class AgentBrainTests(unittest.TestCase):
 
     def test_missing_key_makes_no_request(self):
         self.values.stop()
-        with patch('agent_core.dotenv_values',return_value={}):
+        with patch('agent_core.dotenv_values',return_value={}),patch('agent_core.credential_key',return_value=None):
             with self.assertRaisesRegex(AgentError,'GEMINI_API_KEY'): AgentBrain().ask('hello')
         self.create.assert_not_called()
 

@@ -3,6 +3,7 @@ from pathlib import Path
 import os
 import wave
 from dotenv import dotenv_values
+from provider_keys import credential_key
 from groq import Groq,AuthenticationError,RateLimitError,APITimeoutError,APIConnectionError,APIStatusError
 ROOT=Path(__file__).resolve().parent
 DEFAULT_MODEL='whisper-large-v3-turbo'
@@ -26,7 +27,7 @@ def transcribe_recording(path,api_key=None,language=None):
                 raise TranscriptionError('Recording is empty. Record a command again.')
     except (wave.Error,EOFError,OSError) as exc:
         raise TranscriptionError('Recording could not be read. Record a command again.') from exc
-    key=api_key or os.environ.get('GROQ_API_KEY') or dotenv_values(ROOT/'.env').get('GROQ_API_KEY')
+    key=api_key or os.environ.get('GROQ_API_KEY') or credential_key('GROQ_API_KEY') or dotenv_values(ROOT/'.env').get('GROQ_API_KEY')
     if not key or not key.strip():
         raise TranscriptionError('Add GROQ_API_KEY to your local .env file, then try again.')
     from memory import LocalState

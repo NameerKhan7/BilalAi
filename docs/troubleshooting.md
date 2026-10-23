@@ -12,7 +12,7 @@ For startup troubleshooting, inspect the private `logs/background.log` and `logs
 
 ## “Hey Bilal” does not activate
 
-1. Confirm **Listen for Hey Bilal** is enabled and the assistant is idle rather than waiting for missing input, approval, or a task.
+1. Wake is off by default. Confirm a fresh independent acceptance report permits enabling **Listen for Hey Bilal** and the assistant is idle rather than waiting for missing input, approval, or a task.
 2. Check the correct Windows microphone and microphone permissions. Test a manual recording from the tray to distinguish microphone trouble from wake trouble.
 3. Run the local model installer, then quit and restart Bilal:
 
@@ -37,7 +37,7 @@ Automatic follow-up listening is disabled by default. Release of a started hold 
 
 ## Global hold-to-talk does not behave as expected
 
-Use **left Ctrl + left Shift**, not the right-side modifiers. Hold to record and release either key to submit. Wait for the listening state before speaking. The shortcut is state polling, not interception; another app may also react to its modifiers. It cannot approve a pending action or submit an email paste box. It can answer a spoken general clarification, such as city/country, while preserving the original task. If an existing task is processing, holding is not an immediate second queued request.
+Use the configured shortcut; the default is **Ctrl + Shift + Space** with left modifiers. Left Ctrl + left Shift alone works only if selected as a remap in Settings. Hold to record and release either key to submit. Wait for the listening state before speaking. The Windows hook tracks configured chord keys and forwards events; another app may also react. Restart after changing remap/toggle settings. It cannot approve a pending action or submit an email paste box. It can answer a spoken general clarification, such as city/country, while preserving the original task. If an existing task is processing, holding is not an immediate second queued request.
 
 A new hold capture suppresses silence/no-speech endpoints while held, but has a 600s chunk bound. An already running ordinary wake/manual capture keeps its original 90s maximum. Reaching a bound can begin processing while still held without hiding the companion.
 
@@ -45,7 +45,7 @@ A new hold capture suppresses silence/no-speech endpoints while held, but has a 
 
 The current endpoint ends capture after **four seconds of silence** following speech; it cannot infer whether you intended to continue. It waits up to ten seconds for initial speech and caps a command at ninety seconds. A three-second pause should normally fit, but low microphone level can make quiet speech resemble silence.
 
-Check distance/input level and the saved transcript before assuming the model ignored words. Recording defaults are in [Configuration](configuration.md). For a longer pause, use global **left Ctrl + left Shift** hold-to-talk and release to submit. Its held endpoint suppresses the ordinary silence stop; maximum capture bounds still apply.
+Check distance/input level and the saved transcript before assuming the model ignored words. Recording defaults are in [Configuration](configuration.md). For a longer pause, use global **Ctrl + Shift + Space** hold-to-talk and release to submit. Its held endpoint suppresses the ordinary silence stop; maximum capture bounds still apply.
 
 ## Transcription gets an app or song name wrong
 
@@ -55,13 +55,13 @@ Avoid blanket text substitutions: a real word could be corrupted. If the transcr
 
 ## Transcription fails
 
-A missing/rejected Groq key, unavailable quota, timeout, or network failure produces a user-facing error. Check `GROQ_API_KEY` locally and the provider account's quota without exposing the key. Use the project's virtual environment and [setup instructions](getting-started.md).
+A missing/rejected Groq key, unavailable quota, timeout, or network failure produces a user-facing error. Check the Groq key in Settings/Windows Credential Manager and the provider account's quota without exposing the key. Use the project's virtual environment and [setup instructions](getting-started.md).
 
 The supported input is the recorder's nonempty mono 16 kHz, 16-bit WAV, up to 25 MiB. Unrelated audio formats should not be passed directly to the transcription function. A typed request can help isolate transcription from reasoning.
 
 ## A typed request also fails
 
-Check `GEMINI_API_KEY`, optional `GEMINI_MODEL`, network access, and provider quota. Environment variables override `.env` values, so an old process value can override a corrected local file. Restart after changing configuration.
+Check the Gemini key in Settings/Windows Credential Manager, optional `GEMINI_MODEL`, network access, and provider quota. Process environment overrides Credential Manager, which overrides legacy `.env`, so an old process value can override a corrected stored credential. Restart after changing configuration.
 
 The agent has bounded rounds/timeouts; a long or repeatedly blocked task may stop without completing. Read the relevant private task trace for the actual failed stage.
 
@@ -81,7 +81,7 @@ If speech was interrupted, check whether a cancellation or another UI interactio
 
 ## The missing-detail box is waiting
 
-For an email address, paste the requested detail and press **Enter** or **Continue**. For a general spoken question, hold left Ctrl + left Shift, say the answer, and release; no text popup is expected. The current input is single-line, limited to 2,000 characters. An email request requires a complete address; a person's name alone is insufficient. Cancel or Escape ends this pending continuation.
+For an email address, paste the requested detail and press **Enter** or **Continue**. For a general spoken question, hold the configured talk shortcut (default Ctrl+Shift+Space), say the answer, and release; no text popup is expected. The current input is single-line, limited to 2,000 characters. An email request requires a complete address; a person's name alone is insufficient. Cancel or Escape ends this pending continuation.
 
 Providing an address resumes draft preparation. It does not approve sending; the exact email must still be reviewed separately.
 
@@ -135,3 +135,35 @@ Prayer lookup requires confirmed city, country, date, and method; no GPS/IP loca
 This reads a local saved trace only; it makes no provider calls and replays no actions. The default output summarizes model rounds, elapsed time, provider HTTP code, tool counts, repeats, unreadable pages, and per-step status/timing. Older traces may lack the newer timing fields. A 429 provider code indicates quota/rate limiting; an unreadable page is a source failure, not verified evidence.
 
 Add `--details` only for local investigation: it prints the private request, outcome, and tool arguments. Review and redact before sharing any output. Default output reduces content exposure but still includes filenames, timestamps, model names, and activity metadata.
+
+## Wake remains disabled despite installed models
+
+That is the current default and acceptance policy. Model files, saved-clip replay, and a configured microphone do not satisfy the gate. A report must record at least 50 independent positives at 90% or better activation, at least one hour of negatives with fewer than one false activation/hour, and a timestamp within 30 days. Use the configured talk shortcut until proper field acceptance is recorded; do not manufacture a passing report from unit tests.
+
+## Provider migration or Claude delegation fails
+
+Use Settings to save a provider key or move legacy `.env` entries into Windows Credential Manager. Each stored key is read back before migration blanks its source entry. The fallback still exists; do not restore plaintext keys just because `.env` entries are blank. Credential access is tied to Windows account storage, not a universal encrypted database.
+
+Claude requires `ANTHROPIC_API_KEY` for its isolated bare invocation. An installed Claude CLI and a successful `--help` call do not establish an authorized task. The recorded live delegation check currently covers read-only Codex and a Gemini queue answer; approved write-mode delegation and OS read isolation remain incomplete.
+
+## A task is queued, blocked, or interrupted
+
+Open **Tasks, history and settings**. Inspect the selected task's steps, result artifacts, and approval card. A blocked policy action may need an allowed folder/domain or an exact review; it should not be bypassed by asking another tool. On process restart, interrupted work needs explicit resume. Never repeat an uncertain external write before checking its real outcome.
+
+Use **Ctrl+Alt+Backspace** for global stop. It cancels work/capture, not completed filesystem, browser, or account changes. New task records and artifacts live in SQLite; the older `diagnose_task.py` reads JSON agent traces and is not a replacement for Task Center when the queued runtime disables those traces.
+
+## Owned browser cannot reach a page
+
+Add the exact hostname in Settings, including every required public subresource/redirect host where appropriate. The Playwright session has its own `data/browser-profile/`; it does not attach your personal Chrome profile. Public navigation/read success does not prove login or form completion. Authentication, submission, upload/download, purchase, and destructive controls are blocked; stale element IDs require a fresh read.
+
+## Screen question is blocked or unavailable
+
+Start the explicit picker from the tray, choose a harmless scope, and check the visible capture indicator. Sensitive-window title/process overlap, the 20/day cap, cancelled picker, or expired memory-only frame can block capture. Minimize sensitive content or request a fresh capture; do not disable privacy checks to force it through. Images are not saved, but a textual answer/artifact can persist. No local OCR engine or complete 20-element physical pointer acceptance exists; fullscreen, secure-desktop, and mixed-DPI behavior still need validation.
+
+For implementation/acceptance distinctions, use the [capability matrix](CAPABILITY_STATUS.md) and [task-system guide](task-system.md).
+
+## An edited or restarted plan needs review again
+
+Editing a deterministic plan invalidates the previous approval. Review the replacement plan rather than retrying the old ID. A batch contains at most20 typed file/contact/project/schedule calls; dynamic UI/DOM controls are excluded. On a failed/unverified step the plan stops; inspect the completed effects before creating another request, because earlier steps are not replayed automatically.
+
+Normal quit preserves waiting non-secret plans and marks active work interrupted. After restart, review the pending plan; expired RAM secret slots need a fresh paste and approval. Global stop all revokes both policy and business pending approvals, so it intentionally differs from normal quitting. No write-mode external-agent batch is available.

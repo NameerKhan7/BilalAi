@@ -4,7 +4,7 @@
 
 Bilal needs both repeatable software tests and real use on the target PC. A mocked send is not a delivered email, an installed speech engine is not an audible reply, and a configured startup shortcut is not a successful sign-in run.
 
-**Latest regression:** 154 automated tests passed on **23 October 2026** with native Windows support. These cover simulated audio/providers and mocked external effects. Live Gmail/Notion acceptance, fresh physical voice/background-media testing, real keyboard/microphone acceptance, and sign-in acceptance remain pending.
+**Prior recorded regression:** 154 automated tests passed on **23 October 2026** with native Windows support. See the capability-build validation section below for newer evidence. These cover simulated audio/providers and mocked external effects. Live Gmail/Notion acceptance, fresh physical voice/background-media testing, real keyboard/microphone acceptance, and sign-in acceptance remain pending.
 
 ## Run the regression suite
 
@@ -59,7 +59,7 @@ Quit any previous instance from its tray menu and launch the updated app. Record
 | “hey” alone, “hee haa,” or similar non-trigger sounds | No activation. |
 | Full “Hey Bilal” followed immediately by a harmless question | Activation, first words preserved, complete answer aloud, then hidden without automatic follow-up capture. |
 | After a reply, speak without wake/hold/manual activation | No automatic new command recording. |
-| Hold left Ctrl + left Shift, pause over4s, continue, then release | Capture survives the thinking pause; release submits once and hides immediately; background processing/audio continue without reopening the mic. |
+| Hold Ctrl + Shift + Space, pause over4s, continue, then release | Capture survives the thinking pause; release submits once and hides immediately; background processing/audio continue without reopening the mic. |
 | Hold/release during TTS, input, or approval | No self-recorded reply; no shortcut submission or approval of dialogs; no duplicate capture. |
 | Dictated request with a three-second thinking pause | Command continues across the pause. A pause over four seconds may end capture by design. |
 | Missing city/country | Spoken clarification with no text dialog; hold-to-talk or verified wake answer resumes the original lookup. |
@@ -150,3 +150,29 @@ Check quiet search and prayer adapters with fake HTTP responses, including block
 The latest validation run passed 154 automated tests on native Windows. A live Bing RSS search returned usable results. A live Gemini Fajr request used one `prayer_times` call with zero browser-opening attempts and answered **4:57 AM for Wah Cantt on 23 October 2026**, stating the Karachi calculation method and distinguishing prayer start from congregation time. This is evidence for that single city/date/run, not a standing current prayer time or proof of every location/method.
 
 The earlier city-name endpoint returned unrelated coordinates; the current coordinate flow resolves the settlement independently and checks returned coordinates, date and method. Regression fixtures reject mismatched coordinates and invalid/ambiguous location responses. Live Gmail/Notion delivery, physical microphone/hotkey use, and real power transitions remain separate acceptance work.
+
+## Capability-build validation — 23 October 2026
+
+The confirmed full native Windows suite passed **195 tests in 22.078 seconds on 23 October 2026**, including screen/DOM and deterministic-plan regression checks. Do not infer completion of all P0 requirements from a test count. The [capability matrix](CAPABILITY_STATUS.md) tracks 138 specification items and distinguishes code, automated evidence, live evidence, and missing acceptance. Start with [Task system](task-system.md) for the new runtime.
+
+Evidence recorded by the implementation work:
+
+- Gemini/Groq provider keys were moved to Windows Credential Manager with verified readback. No credential values belong in test evidence.
+- Global keyboard-hook registration/release passed a native check. This is not physical 50-trial shortcut, latency, or microphone acceptance.
+- A real Gemini queued answer and a real read-only Codex answer completed. Claude 2.1.309 was installed and help inspected, but `ANTHROPIC_API_KEY` is missing, so a live Claude task was not validated.
+- A native 100,000-byte clipboard roundtrip was verified and the original clipboard restored. This is one payload-size check, not every content type or application.
+- The owned Chrome session opened and read `example.com`, `www.python.org`, `docs.python.org`, `en.wikipedia.org`, and `www.wikipedia.org`. This establishes public opening/reading only, not safe form execution across five sites.
+- Screen picker, indicator, overlap guard, daily cap, and pointer interception have code/test paths. No actual screen capture was submitted during this work; 20-element safe OS pointer acceptance remains pending.
+
+Use these additional deliberate acceptance checks:
+
+1. Confirm wake is off on a fresh/default launch and cannot be enabled without the fresh independent acceptance gate. The gate needs50 positive trials with at least 90% true activations and one hour of negatives with fewer than one false activation/hour, dated within 30 days.
+2. Hold the default **Ctrl+Shift+Space**, speak, release, and expect one queued task with immediate avatar hiding. Test Settings remapping/toggle after restart. Verify **Ctrl+Alt+Backspace** stops pending/running work and capture without claiming rollback of completed effects.
+3. Queue another harmless request while earlier task work runs. Inspect durable task state, steps, artifacts, cancellation, interrupted recovery, and exact reviewed-step continuation. Resume must not rerun unrelated completed writes.
+4. Put an exact non-secret payload in Quick Input, reference it in an instruction, and verify byte-preserving output and stored non-secret snippet behavior. For a secret fixture, verify model context/history/artifacts use masked slots and no reusable plaintext snippet is created. Use test values, never real credentials in test output.
+5. In dry-run, confirm no backend mutation. Exercise out-of-root paths, private directories, stale approvals, changed exact arguments, and secret-bearing/`.env` L2 approvals with fixtures. Verify controlled-write readback and version restoration within an allowed test folder.
+6. Exercise screen picker cancellation without a capture; then, only when deliberately ready to share a chosen harmless screen, validate the indicator, sensitive-window rejection, no stored screenshot file, and answer-only behavior. Treat physical pointer, mixed-DPI, fullscreen, and secure-desktop tests as separate pending checks.
+
+OS read isolation, approved write-mode headless delegation, benchmark 50, seven-day dogfooding, account delivery, and the complete P0 acceptance set remain unfinished. Unit/contract tests and the listed live checks do not close those gaps.
+
+Deterministic-plan regression includes one approval for up to 20 typed calls, edited-plan invalidation, stop-on-first-failure behavior, no replay of earlier steps, non-secret plan recovery for later review, and global-stop approval revocation. Dynamic UI batches and approved external-agent writes remain outside the completed scope. The 195-test suite does not replace the 50-task semantic benchmark, real physical voice acceptance, or seven-day dogfooding.

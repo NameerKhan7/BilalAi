@@ -138,6 +138,9 @@ class AssistantWindow(QWidget):
         super().__init__();self.preview=preview;self.visual='idle';self.verified=False;self.speech_pending=False;self.pending_dialog=None;self.input_dialog=None;self.last_wake_sample=None
         self.conversation_enabled=False if conversation_enabled is None else conversation_enabled
         self.hold_started=False;self.hold_background=False
+        self.task_center=None;self.quick_panel=None;self.screen_service=None;self.task_notices=[]
+        self.notice_timer=QTimer(self);self.notice_timer.setInterval(300);self.notice_timer.timeout.connect(self.deliver_task_notice);self.notice_timer.start()
+        self.click_timer=QTimer(self);self.click_timer.setSingleShot(True);self.click_timer.timeout.connect(self.avatar_clicked)
         self.conversation=ConversationSession();self.hotkey=None
         self.turn_timer=QTimer(self);self.turn_timer.setSingleShot(True);self.turn_timer.timeout.connect(self.continue_conversation)
         self.setWindowTitle('Bilal AI');self.setWindowFlags(Qt.WindowType.FramelessWindowHint|Qt.WindowType.Tool|Qt.WindowType.WindowStaysOnTopHint)
@@ -177,7 +180,8 @@ class AssistantWindow(QWidget):
         self.privacy.setStyleSheet('font-size:10px;color:#77716D;');body.addWidget(self.privacy)
         self.controller=None;self.speech=None;self.tray=None
         if not preview:
-            self.controller=AssistantController();self.controller.event.connect(self.handle_event)
+            self.controller=AssistantController(enable_tasks=True);self.controller.event.connect(self.handle_event)
+            self.wake.setChecked(self.controller.wake_enabled)
             self.mic.clicked.connect(self.record);self.send.clicked.connect(self.send_text)
             self.cancel.clicked.connect(self.cancel_task);self.wake.toggled.connect(self.toggle_wake)
             if QTextToSpeech.availableEngines():
@@ -193,7 +197,11 @@ class AssistantWindow(QWidget):
             listen=menu.addAction('Start / finish recording');listen.triggered.connect(self.record)
             cancel=menu.addAction('Cancel request');cancel.triggered.connect(self.cancel_task)
             details=menu.addAction('Read reply / type a request');details.triggered.connect(self.show_details)
-            wake_action=menu.addAction('Listen for Hey Bilal');wake_action.setCheckable(True);wake_action.setChecked(True);wake_action.toggled.connect(self.wake.setChecked)
+            tasks=menu.addAction('Tasks, history and settings');tasks.triggered.connect(self.show_task_center)
+            quick=menu.addAction('Paste exact text / quick input');quick.triggered.connect(self.show_quick_input)
+            screen=menu.addAction('Ask about a window / point to ask');screen.triggered.connect(self.show_screen_capture)
+            stop_all=menu.addAction('Stop all background tasks');stop_all.triggered.connect(self.stop_everything)
+            wake_action=menu.addAction('Listen for Hey Bilal (acceptance required)');wake_action.setCheckable(True);wake_action.setChecked(self.controller.wake_enabled);wake_action.toggled.connect(self.wake.setChecked)
             self.wake.toggled.connect(wake_action.setChecked)
             voice_action=menu.addAction('Speak replies');voice_action.setCheckable(True);voice_action.setChecked(self.voice.isChecked());voice_action.toggled.connect(self.voice.setChecked)
             self.voice.toggled.connect(voice_action.setChecked)
@@ -206,12 +214,54 @@ class AssistantWindow(QWidget):
             self.tray.setContextMenu(menu);self.tray.setToolTip('Bilal AI — your desktop companion')
             self.tray.activated.connect(lambda reason:self.show_requested() if reason==QSystemTrayIcon.ActivationReason.Trigger else None)
             self.tray.show()
-            self.hotkey=HoldToTalk(self);self.hotkey.changed.connect(self.hold_changed);self.hotkey.start()
+            shortcut=self.controller.runtime.store.setting('talk_shortcut',{'keys':[0xA2,0xA0,0x20],'toggle':False})
+            self.hotkey=HoldToTalk(self,keys=shortcut['keys'],toggle=shortcut.get('toggle',False));self.hotkey.changed.connect(self.hold_changed)
+            self.stop_hotkey=HoldToTalk(self,keys=[0xA2,0xA4,0x08]);self.stop_hotkey.changed.connect(lambda held:self.stop_everything() if held else None)
+            try:self.hotkey.start();self.stop_hotkey.start()
+            except RuntimeError as exc:self.subtitle.setText(str(exc))
         self.drag=None;self.moved=False
-        self.setToolTip('Say Hey Bilal or hold left Ctrl + left Shift to talk. Right-click for controls.')
+        self.setToolTip('Hold left Ctrl + left Shift + Space to talk (configurable). Double-click to paste exact text. Right-click for controls.')
     def begin_conversation(self):
         if not self.conversation_enabled:return
         self.conversation.begin();self.controller.conversation_active=True;self.turn_timer.stop()
+    def show_task_center(self):
+        if not self.controller or not self.controller.runtime:return
+        if self.task_center is None:
+            from task_center import TaskCenter
+            self.task_center=TaskCenter(self.controller.runtime)
+        self.task_center.refresh();self.task_center.show();self.task_center.raise_();self.task_center.activateWindow()
+    def stop_everything(self):
+        self.cancel_task();self.controller.runtime.stop_all()
+        if self.screen_service:self.screen_service.close()
+    def show_screen_capture(self,question='What is on this screen?',source_task=None):
+        if not self.controller or not self.controller.runtime:return
+        if self.screen_service is None:
+            from screen_awareness import ScreenAwareness
+            self.screen_service=ScreenAwareness(self.controller.runtime,self)
+        self.screen_service.present(question if isinstance(question,str) else 'What is on this screen?',source_task)
+    def show_quick_input(self):
+        if not self.controller:return
+        if self.quick_panel is None:
+            from quick_input import QuickInput
+            self.quick_panel=QuickInput(self.controller)
+        self.quick_panel.show();self.quick_panel.raise_();self.quick_panel.activateWindow()
+    def deliver_task_notice(self):
+        if not self.task_notices or not self.controller or self.controller.state!='idle' or self.speech_pending or self.conversation.held or self.pending_dialog or self.input_dialog:return
+        name,data=self.task_notices.pop(0)
+        if name=='task_screen':self.show_screen_capture(data['screen_request']['question'],data['task_id'])
+        elif name=='task_approval':
+            if data.get('business_approval'):self.show_approval(self.controller.state_store.get(data['approval_id']))
+            else:self.show_task_center()
+            self.speak_message('A task needs your approval. Review the exact action in Tasks.')
+        elif name=='task_input':
+            self.controller.pending_input={**data['input_request'],'task_id':data['task_id'],'original_goal':data.get('original_goal','')}
+            self.handle_event('reply',{'text':data['input_request']['question'],'verified':False});self.handle_event('input_needed',self.controller.pending_input)
+        else:
+            text=data.get('reply','Task updated.')
+            self.reply.setPlainText(text);self.reply.show()
+            spoken=text if data.get('answer_only') or len(text.split())<=15 else ('Task finished. The full answer is in task history.' if data.get('state')=='done' else 'A task needs attention. Check task history.')
+            if self.tray:self.tray.showMessage('Bilal AI',spoken,QSystemTrayIcon.MessageIcon.Information,2500)
+            self.speak_message(spoken)
     def end_conversation(self):
         self.conversation.end();self.turn_timer.stop()
         if self.controller:self.controller.conversation_active=False
@@ -350,6 +400,9 @@ class AssistantWindow(QWidget):
         self.controller.set_wake(enabled)
         if self.controller.state=='idle':self.set_visual('idle' if enabled else 'inactive','Say “Hey Bilal”, or tap the microphone.' if enabled else 'Tap the microphone whenever you need me.')
     def handle_event(self,name,data):
+        if name in {'task_finished','task_approval','task_input','task_screen','scheduler_failed'}:
+            if data.get('owner')!='planner':self.task_notices.append((name,data))
+            return
         if name=='wake_activated':
             self.hold_background=False
             self.begin_conversation()
@@ -456,7 +509,11 @@ class AssistantWindow(QWidget):
             if self.moved:self.move(position)
     def mouseReleaseEvent(self,event):
         clicked=self.drag is not None and not self.moved;self.drag=None
-        if clicked:self.avatar_clicked()
+        if clicked:self.click_timer.start(QApplication.doubleClickInterval())
+    def mouseDoubleClickEvent(self,event):
+        if event.button()==Qt.MouseButton.LeftButton:
+            self.click_timer.stop();self.drag=None;self.show_quick_input();event.accept()
+        else:super().mouseDoubleClickEvent(event)
     def avatar_clicked(self):
         if not self.controller or self.controller.state!='idle' or self.speech_pending:return
         if self.visual in {'processing','loading','listening','speaking'}:return
@@ -481,13 +538,20 @@ class AssistantWindow(QWidget):
                 'size':[self.width(),self.height()],'speech_engine':self.speech.engine() if self.speech else None,
                 'wake_enabled':self.wake.isChecked(),'wake_status':monitor.status if monitor else 'disabled',
                 'wake_guard':'offline_full_phrase','wake_verifier_loaded':bool(monitor and getattr(monitor.verifier,'model',None) is not None),
-                'hold_to_talk':bool(self.hotkey and self.hotkey.available),'conversation_active':self.conversation.active}),encoding='utf-8')
+                'hold_to_talk':bool(self.hotkey and self.hotkey.available),'conversation_active':self.conversation.active,
+                'task_runtime':bool(self.controller.runtime),'talk_shortcut':list(self.hotkey.keys) if self.hotkey else [],
+                'hook_registered':bool(self.hotkey and self.hotkey.hook and self.hotkey.hook.ready.is_set() and not self.hotkey.hook.error)}),encoding='utf-8')
         except OSError:pass
     def quit(self):
         if getattr(self,'shutting_down',False):return
         self.shutting_down=True
         self.turn_timer.stop()
+        self.notice_timer.stop();self.click_timer.stop()
+        if self.task_center:self.task_center.close()
+        if self.quick_panel:self.quick_panel.close()
+        if self.screen_service:self.screen_service.close()
         if self.hotkey:self.hotkey.stop()
+        if hasattr(self,'stop_hotkey'):self.stop_hotkey.stop()
         self.character.timer.stop()
         for wave in self.findChildren(VoiceWave):wave.timer.stop()
         if hasattr(self,'fade'):self.fade.stop()
